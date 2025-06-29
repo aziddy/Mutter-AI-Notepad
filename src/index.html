@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mutter AI Notepad</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-microphone"></i> Mutter AI Notepad</h1>
+                <div class="header-actions">
+                    <button id="settingsBtn" class="btn btn-icon" title="Settings">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="upload-section">
+                    <button id="selectFileBtn" class="btn btn-primary">
+                        <i class="fas fa-upload"></i>
+                        Select Audio/Video File
+                    </button>
+                </div>
+
+                <div class="transcriptions-list">
+                    <h3>Recent Transcriptions</h3>
+                    <div id="transcriptionsList" class="transcriptions">
+                        <!-- Transcriptions will be loaded here -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Content Area -->
+            <div class="content">
+                <!-- File Info -->
+                <div id="fileInfo" class="file-info hidden">
+                    <div class="file-details">
+                        <i class="fas fa-file-audio"></i>
+                        <span id="fileName">No file selected</span>
+                    </div>
+                    <button id="transcribeBtn" class="btn btn-secondary" disabled>
+                        <i class="fas fa-play"></i>
+                        Start Transcription
+                    </button>
+                </div>
+
+                <!-- Progress -->
+                <div id="progressSection" class="progress-section hidden">
+                    <div class="progress-content">
+                        <div class="spinner"></div>
+                        <p id="progressText">Processing...</p>
+                    </div>
+                </div>
+
+                <!-- Transcription Results -->
+                <div id="resultsSection" class="results-section hidden">
+                    <div class="results-header">
+                        <h2>Transcription Results</h2>
+                        <div class="results-actions">
+                            <button id="copyBtn" class="btn btn-icon" title="Copy to clipboard">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button id="saveBtn" class="btn btn-icon" title="Save to file">
+                                <i class="fas fa-save"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="transcription-content">
+                        <div id="transcriptionText" class="transcription-text"></div>
+                    </div>
+
+                    <!-- AI Features -->
+                    <div class="ai-features">
+                        <div class="ai-header">
+                            <h3><i class="fas fa-robot"></i> AI Features</h3>
+                            <div class="api-key-input">
+                                <input type="password" id="apiKeyInput" placeholder="Enter OpenAI API Key (optional)">
+                                <button id="saveApiKeyBtn" class="btn btn-small">Save</button>
+                            </div>
+                        </div>
+
+                        <div class="ai-actions">
+                            <button id="generateSummaryBtn" class="btn btn-outline" disabled>
+                                <i class="fas fa-list"></i>
+                                Generate Summary
+                            </button>
+                            <button id="generateInsightsBtn" class="btn btn-outline" disabled>
+                                <i class="fas fa-lightbulb"></i>
+                                Generate Insights
+                            </button>
+                        </div>
+
+                        <div class="question-section">
+                            <div class="question-input">
+                                <input type="text" id="questionInput"
+                                    placeholder="Ask a question about the transcription..." disabled>
+                                <button id="askQuestionBtn" class="btn btn-outline" disabled>
+                                    <i class="fas fa-question"></i>
+                                    Ask
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="aiResults" class="ai-results hidden">
+                            <h4 id="aiResultsTitle">AI Analysis</h4>
+                            <div id="aiResultsContent" class="ai-results-content"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Welcome Screen -->
+                <div id="welcomeScreen" class="welcome-screen">
+                    <div class="welcome-content">
+                        <i class="fas fa-microphone welcome-icon"></i>
+                        <h2>Welcome to Mutter AI Notepad</h2>
+                        <p>Upload an audio or video file to get started with local transcription</p>
+                        <div class="features">
+                            <div class="feature">
+                                <i class="fas fa-shield-alt"></i>
+                                <span>100% Local Processing</span>
+                            </div>
+                            <div class="feature">
+                                <i class="fas fa-bolt"></i>
+                                <span>Powered by OpenAI Whisper</span>
+                            </div>
+                            <div class="feature">
+                                <i class="fas fa-robot"></i>
+                                <span>AI-Enhanced Analysis</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast hidden">
+        <div class="toast-content">
+            <span id="toastMessage"></span>
+            <button id="toastClose" class="toast-close">&times;</button>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>

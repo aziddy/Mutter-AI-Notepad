@@ -1,0 +1,40 @@
+{
+    "name": "mutter-ai-notepad",
+    "version": "1.0.0",
+    "description": "Local transcription app with AI features",
+    "main": "src/main.js",
+    "scripts": {
+        "start": "electron .",
+        "dev": "electron . --dev",
+        "build": "electron-builder",
+        "dist": "npm run build"
+    },
+    "keywords": [
+        "electron",
+        "transcription",
+        "whisper",
+        "ai"
+    ],
+    "author": "Your Name",
+    "dependencies": {
+        "electron": "^28.0.0",
+        "nodejs-whisper": "^0.1.19",
+        "openai": "^4.24.0",
+        "ffmpeg-static": "^5.2.0",
+        "fluent-ffmpeg": "^2.1.2"
+    },
+    "devDependencies": {
+        "electron-builder": "^24.9.1"
+    },
+    "build": {
+        "appId": "com.mutter.ai.notepad",
+        "productName": "Mutter AI Notepad",
+        "directories": {
+            "output": "dist"
+        },
+        "files": [
+            "src/**/*",
+            "node_modules/**/*"
+        ]
+    }
+}

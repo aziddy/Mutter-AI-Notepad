@@ -79,8 +79,50 @@
                         </div>
                     </div>
 
+                    <!-- Transcription Metadata -->
+                    <div id="transcriptionMetadata" class="transcription-metadata hidden">
+                        <div class="metadata-grid">
+                            <div class="metadata-item">
+                                <i class="fas fa-clock"></i>
+                                <span id="metadataDuration">Duration: --</span>
+                            </div>
+                            <div class="metadata-item">
+                                <i class="fas fa-language"></i>
+                                <span id="metadataLanguage">Language: --</span>
+                            </div>
+                            <div class="metadata-item">
+                                <i class="fas fa-file-alt"></i>
+                                <span id="metadataWordCount">Words: --</span>
+                            </div>
+                            <div class="metadata-item">
+                                <i class="fas fa-calendar"></i>
+                                <span id="metadataDate">Date: --</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Transcription Content -->
                     <div class="transcription-content">
-                        <div id="transcriptionText" class="transcription-text"></div>
+                        <div class="transcription-tabs">
+                            <button id="textTab" class="tab-btn active" data-tab="text">
+                                <i class="fas fa-align-left"></i>
+                                Text View
+                            </button>
+                            <button id="segmentsTab" class="tab-btn" data-tab="segments">
+                                <i class="fas fa-list"></i>
+                                Segmented View
+                            </button>
+                        </div>
+
+                        <div id="textView" class="tab-content active">
+                            <div id="transcriptionText" class="transcription-text"></div>
+                        </div>
+
+                        <div id="segmentsView" class="tab-content">
+                            <div id="transcriptionSegments" class="transcription-segments">
+                                <!-- Segments will be loaded here -->
+                            </div>
+                        </div>
                     </div>
 
                     <!-- AI Features -->

@@ -33,9 +33,7 @@ function createWindow() {
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  app.quit();
 });
 
 app.on('activate', () => {
@@ -64,24 +62,48 @@ ipcMain.handle('select-file', async () => {
 ipcMain.handle('transcribe-file', async (event, filePath) => {
   console.log('transcribe-file given file path =', filePath);
   try {
-    const transcription = await transcribeAudio(filePath);
+    const result = await transcribeAudio(filePath);
     
-    // Save transcription to file
-    console.log('transcribe-file generateing save path');
+    // Save transcription to both text and JSON files
+    console.log('transcribe-file generating save paths');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `transcription-${timestamp}.txt`;
-    const savePath = path.join(process.cwd(), 'transcriptions', fileName);
-
-    console.log('transcribe-file save path =', savePath);
+    const baseFileName = `transcription-${timestamp}`;
+    const textFileName = `${baseFileName}.txt`;
+    const jsonFileName = `${baseFileName}.json`;
+    const saveDir = path.join(process.cwd(), 'transcriptions');
+    
+    console.log('transcribe-file save dir =', saveDir);
     
     // Ensure transcriptions directory exists
-    await fs.mkdir(path.dirname(savePath), { recursive: true });
-    await fs.writeFile(savePath, transcription);
+    await fs.mkdir(saveDir, { recursive: true });
+    
+    // Save text file
+    const textPath = path.join(saveDir, textFileName);
+    await fs.writeFile(textPath, result.text);
+    
+    // Save JSON file with metadata
+    const jsonData = {
+      text: result.text,
+      segments: result.json?.segments || [],
+      language: result.json?.language || 'en',
+      metadata: {
+        originalFile: filePath,
+        transcribedAt: new Date().toISOString(),
+        duration: result.json?.duration || null,
+        wordCount: result.text.split(/\s+/).length
+      }
+    };
+    
+    const jsonPath = path.join(saveDir, jsonFileName);
+    await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2));
     
     return {
-      transcription,
-      savedPath: savePath,
-      fileName
+      transcription: result.text,
+      jsonData: jsonData,
+      savedPath: textPath,
+      jsonPath: jsonPath,
+      fileName: textFileName,
+      jsonFileName: jsonFileName
     };
   } catch (error) {
     throw new Error(`Transcription failed: ${error.message}`);
@@ -119,24 +141,63 @@ ipcMain.handle('get-transcriptions', async () => {
     
     const files = await fs.readdir(transcriptionsDir);
     const transcriptions = [];
+    const processedFiles = new Set();
     
+    // First, process JSON files (they contain more metadata)
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const filePath = path.join(transcriptionsDir, file);
+        const content = await fs.readFile(filePath, 'utf-8');
+        const stats = await fs.stat(filePath);
+        
+        try {
+          const jsonData = JSON.parse(content);
+          const baseFileName = file.replace('.json', '');
+          
+          transcriptions.push({
+            fileName: baseFileName,
+            content: jsonData.text,
+            jsonData: jsonData,
+            createdAt: stats.birthtime,
+            size: stats.size,
+            hasJson: true
+          });
+          
+          processedFiles.add(baseFileName);
+        } catch (error) {
+          console.error('Failed to parse JSON file:', file, error);
+        }
+      }
+    }
+    
+    // Then process text files that don't have corresponding JSON files
     for (const file of files) {
       if (file.endsWith('.txt')) {
+        const baseFileName = file.replace('.txt', '');
+        
+        // Skip if we already processed this file as JSON
+        if (processedFiles.has(baseFileName)) {
+          continue;
+        }
+        
         const filePath = path.join(transcriptionsDir, file);
         const content = await fs.readFile(filePath, 'utf-8');
         const stats = await fs.stat(filePath);
         
         transcriptions.push({
-          fileName: file,
+          fileName: baseFileName,
           content,
+          jsonData: null,
           createdAt: stats.birthtime,
-          size: stats.size
+          size: stats.size,
+          hasJson: false
         });
       }
     }
     
     return transcriptions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   } catch (error) {
+    console.error('Error loading transcriptions:', error);
     return [];
   }
 }); 

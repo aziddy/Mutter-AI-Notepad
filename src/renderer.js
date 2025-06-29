@@ -1,5 +1,6 @@
 // Application State
 let currentTranscription = '';
+let currentJsonData = null;
 let currentApiKey = localStorage.getItem('openai_api_key') || '';
 
 // DOM Elements
@@ -14,6 +15,18 @@ const elements = {
     transcriptionText: document.getElementById('transcriptionText'),
     welcomeScreen: document.getElementById('welcomeScreen'),
     transcriptionsList: document.getElementById('transcriptionsList'),
+    
+    // New UI Components
+    transcriptionMetadata: document.getElementById('transcriptionMetadata'),
+    metadataDuration: document.getElementById('metadataDuration'),
+    metadataLanguage: document.getElementById('metadataLanguage'),
+    metadataWordCount: document.getElementById('metadataWordCount'),
+    metadataDate: document.getElementById('metadataDate'),
+    textTab: document.getElementById('textTab'),
+    segmentsTab: document.getElementById('segmentsTab'),
+    textView: document.getElementById('textView'),
+    segmentsView: document.getElementById('segmentsView'),
+    transcriptionSegments: document.getElementById('transcriptionSegments'),
     
     // AI Features
     apiKeyInput: document.getElementById('apiKeyInput'),
@@ -57,6 +70,10 @@ function setupEventListeners() {
     // File selection
     elements.selectFileBtn.addEventListener('click', selectFile);
     elements.transcribeBtn.addEventListener('click', startTranscription);
+    
+    // Tab switching
+    elements.textTab.addEventListener('click', () => switchTab('text'));
+    elements.segmentsTab.addEventListener('click', () => switchTab('segments'));
     
     // AI Features
     elements.saveApiKeyBtn.addEventListener('click', saveApiKey);
@@ -121,6 +138,7 @@ async function startTranscription() {
         const result = await window.electronAPI.transcribeFile(filePath);
         
         currentTranscription = result.transcription;
+        currentJsonData = result.jsonData;
         showTranscriptionResults(result);
         loadTranscriptions(); // Refresh the transcriptions list
         
@@ -149,7 +167,28 @@ function hideProgress() {
 function showTranscriptionResults(result) {
     hideProgress();
     
+    currentTranscription = result.transcription;
+    currentJsonData = result.jsonData;
+    
+    // Display metadata if available
+    if (result.jsonData && result.jsonData.metadata) {
+        displayMetadata(result.jsonData);
+    } else {
+        elements.transcriptionMetadata.classList.add('hidden');
+    }
+    
+    // Display transcription text
     elements.transcriptionText.textContent = result.transcription;
+    
+    // Display segments if available
+    if (result.jsonData && result.jsonData.segments && result.jsonData.segments.length > 0) {
+        displaySegments(result.jsonData.segments);
+        elements.segmentsTab.disabled = false;
+    } else {
+        elements.segmentsTab.disabled = true;
+        elements.segmentsTab.classList.add('disabled');
+    }
+    
     elements.resultsSection.classList.remove('hidden');
     elements.transcribeBtn.disabled = false;
     
@@ -159,6 +198,91 @@ function showTranscriptionResults(result) {
     }
     
     showToast(`Transcription completed! Saved as ${result.fileName}`, 'success');
+}
+
+function displayMetadata(jsonData) {
+    elements.transcriptionMetadata.classList.remove('hidden');
+    
+    // Duration
+    if (jsonData.metadata.duration) {
+        const minutes = Math.floor(jsonData.metadata.duration / 60);
+        const seconds = Math.floor(jsonData.metadata.duration % 60);
+        elements.metadataDuration.textContent = `Duration: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+    } else {
+        elements.metadataDuration.textContent = 'Duration: --';
+    }
+    
+    // Language
+    elements.metadataLanguage.textContent = `Language: ${jsonData.language || 'en'}`;
+    
+    // Word count
+    elements.metadataWordCount.textContent = `Words: ${jsonData.metadata.wordCount || jsonData.text.split(/\s+/).length}`;
+    
+    // Date
+    const date = new Date(jsonData.metadata.transcribedAt);
+    elements.metadataDate.textContent = `Date: ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function displaySegments(segments) {
+    elements.transcriptionSegments.innerHTML = '';
+    
+    segments.forEach((segment, index) => {
+        const segmentElement = document.createElement('div');
+        segmentElement.className = 'segment-item';
+        
+        const startTime = formatTime(segment.start);
+        const endTime = formatTime(segment.end);
+        const confidence = segment.confidence || 0;
+        const confidenceClass = getConfidenceClass(confidence);
+        
+        segmentElement.innerHTML = `
+            <div class="segment-header">
+                <span class="segment-time">${startTime} - ${endTime}</span>
+                <span class="segment-confidence ${confidenceClass}">
+                    ${Math.round(confidence * 100)}% confidence
+                </span>
+            </div>
+            <div class="segment-text">${segment.text}</div>
+        `;
+        
+        elements.transcriptionSegments.appendChild(segmentElement);
+    });
+}
+
+function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function getConfidenceClass(confidence) {
+    if (confidence >= 0.8) return 'confidence-high';
+    if (confidence >= 0.6) return 'confidence-medium';
+    return 'confidence-low';
+}
+
+function switchTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    if (tabName === 'text') {
+        elements.textTab.classList.add('active');
+    } else if (tabName === 'segments') {
+        elements.segmentsTab.classList.add('active');
+    }
+    
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    if (tabName === 'text') {
+        elements.textView.classList.add('active');
+    } else if (tabName === 'segments') {
+        elements.segmentsView.classList.add('active');
+    }
 }
 
 function saveApiKey() {
@@ -275,10 +399,22 @@ function displayTranscriptions(transcriptions) {
         const date = new Date(transcription.createdAt).toLocaleDateString();
         const time = new Date(transcription.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
+        // Add JSON indicator
+        const jsonIndicator = transcription.hasJson ? 
+            '<span class="json-indicator" title="Has detailed segments and metadata"><i class="fas fa-code"></i></span>' : '';
+        
         item.innerHTML = `
-            <h4>${transcription.fileName}</h4>
+            <div class="transcription-item-header">
+                <h4>${transcription.fileName}</h4>
+                ${jsonIndicator}
+            </div>
             <p>${preview}</p>
-            <div class="date">${date} at ${time}</div>
+            <div class="transcription-item-footer">
+                <div class="date">${date} at ${time}</div>
+                <div class="format-indicator">
+                    ${transcription.hasJson ? 'JSON + TXT' : 'TXT only'}
+                </div>
+            </div>
         `;
         
         item.addEventListener('click', () => {
@@ -292,8 +428,28 @@ function displayTranscriptions(transcriptions) {
 function loadTranscription(transcription) {
     hideWelcomeScreen();
     currentTranscription = transcription.content;
+    currentJsonData = transcription.jsonData;
     
+    // Display metadata if available
+    if (transcription.jsonData && transcription.jsonData.metadata) {
+        displayMetadata(transcription.jsonData);
+    } else {
+        elements.transcriptionMetadata.classList.add('hidden');
+    }
+    
+    // Display transcription text
     elements.transcriptionText.textContent = transcription.content;
+    
+    // Display segments if available
+    if (transcription.jsonData && transcription.jsonData.segments && transcription.jsonData.segments.length > 0) {
+        displaySegments(transcription.jsonData.segments);
+        elements.segmentsTab.disabled = false;
+        elements.segmentsTab.classList.remove('disabled');
+    } else {
+        elements.segmentsTab.disabled = true;
+        elements.segmentsTab.classList.add('disabled');
+    }
+    
     elements.resultsSection.classList.remove('hidden');
     elements.fileInfo.classList.add('hidden');
     

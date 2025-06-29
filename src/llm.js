@@ -31,8 +31,8 @@ class LLMService {
             content: `Please provide a comprehensive summary of the following transcription:\n\n${transcription}`
           }
         ],
-        max_tokens: 1000,
-        temperature: 0.3
+        max_tokens: 1000, // Output/Response Token Length Limit
+        temperature: 0.3 // value good for summaries: Balanced consistency with some flexibility
       });
 
       return response.choices[0].message.content.trim();

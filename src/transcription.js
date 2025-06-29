@@ -134,6 +134,7 @@ class TranscriptionService {
         '-m', modelPath,
         '-f', audioPath,
         '-otxt',  // Output as text
+        '-oj', // Output as JSON
         '-l', 'en' // Language
       ];
       
@@ -164,20 +165,40 @@ class TranscriptionService {
         console.log('Full stderr:', stderr);
         
         if (code === 0) {
-          // Read the output file
-          const outputFile = audioPath.replace(/\.[^/.]+$/, '.txt');
-          console.log('Looking for output file:', outputFile);
+          // Read both output files
+          const textOutputFile = audioPath.replace(/\.[^/.]+$/, '.txt');
+          const jsonOutputFile = audioPath.replace(/\.[^/.]+$/, '.json');
+          console.log('Looking for output files:', textOutputFile, jsonOutputFile);
           
-          if (fs.existsSync(outputFile)) {
-            const transcript = fs.readFileSync(outputFile, 'utf8');
-            console.log('Found output file, content length:', transcript.length);
-            // Clean up the output file
-            fs.unlinkSync(outputFile);
-            resolve(transcript.trim());
+          let transcript = '';
+          let jsonData = null;
+          
+          if (fs.existsSync(textOutputFile)) {
+            transcript = fs.readFileSync(textOutputFile, 'utf8');
+            console.log('Found text output file, content length:', transcript.length);
+            // Clean up the text output file
+            fs.unlinkSync(textOutputFile);
           } else {
-            console.log('No output file found, using stdout');
-            resolve(stdout.trim());
+            console.log('No text output file found, using stdout');
+            transcript = stdout.trim();
           }
+          
+          if (fs.existsSync(jsonOutputFile)) {
+            try {
+              const jsonContent = fs.readFileSync(jsonOutputFile, 'utf8');
+              jsonData = JSON.parse(jsonContent);
+              console.log('Found JSON output file, parsed successfully');
+              // Clean up the JSON output file
+              fs.unlinkSync(jsonOutputFile);
+            } catch (error) {
+              console.error('Failed to parse JSON output:', error);
+            }
+          }
+          
+          resolve({
+            text: transcript.trim(),
+            json: jsonData
+          });
         } else {
           reject(new Error(`Whisper process failed with code ${code}. stderr: ${stderr}`));
         }

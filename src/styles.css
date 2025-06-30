@@ -122,6 +122,17 @@ body {
     font-size: 0.75rem;
 }
 
+.srt-indicator {
+    color: #10B981;
+    font-size: 0.75rem;
+}
+
+.indicators {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
 .transcription-item p {
     margin: 0 0 12px 0;
     color: #6B7280;
@@ -336,14 +347,14 @@ body {
     word-wrap: break-word;
 }
 
-/* Transcription Segments */
-.transcription-segments {
+/* Transcription SRT */
+.transcription-srt {
     display: flex;
     flex-direction: column;
     gap: 12px;
 }
 
-.segment-item {
+.srt-entry {
     background: #F9FAFB;
     border: 1px solid #E5E7EB;
     border-radius: 8px;
@@ -351,12 +362,12 @@ body {
     transition: all 0.2s ease;
 }
 
-.segment-item:hover {
+.srt-entry:hover {
     background: #F3F4F6;
     border-color: #D1D5DB;
 }
 
-.segment-header {
+.srt-entry-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -365,7 +376,7 @@ body {
     color: #6B7280;
 }
 
-.segment-time {
+.srt-entry-number {
     background: #E5E7EB;
     padding: 2px 6px;
     border-radius: 4px;
@@ -373,12 +384,15 @@ body {
     font-weight: 500;
 }
 
-.segment-confidence {
-    color: #059669;
+.srt-entry-time {
+    background: #E5E7EB;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
     font-weight: 500;
 }
 
-.segment-text {
+.srt-entry-text {
     color: #374151;
     line-height: 1.5;
     font-size: 0.9rem;
@@ -400,7 +414,7 @@ body {
 /* AI Features */
 .ai-features {
     border-top: 1px solid rgba(0, 0, 0, 0.1);
-    padding-top: 20px;
+    padding: 20px;
 }
 
 .ai-header {

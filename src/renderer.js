@@ -23,10 +23,10 @@ const elements = {
     metadataWordCount: document.getElementById('metadataWordCount'),
     metadataDate: document.getElementById('metadataDate'),
     textTab: document.getElementById('textTab'),
-    segmentsTab: document.getElementById('segmentsTab'),
+    srtTab: document.getElementById('srtTab'),
     textView: document.getElementById('textView'),
-    segmentsView: document.getElementById('segmentsView'),
-    transcriptionSegments: document.getElementById('transcriptionSegments'),
+    srtView: document.getElementById('srtView'),
+    transcriptionSrt: document.getElementById('transcriptionSrt'),
     
     // AI Features
     apiKeyInput: document.getElementById('apiKeyInput'),
@@ -73,7 +73,7 @@ function setupEventListeners() {
     
     // Tab switching
     elements.textTab.addEventListener('click', () => switchTab('text'));
-    elements.segmentsTab.addEventListener('click', () => switchTab('segments'));
+    elements.srtTab.addEventListener('click', () => switchTab('srt'));
     
     // AI Features
     elements.saveApiKeyBtn.addEventListener('click', saveApiKey);
@@ -180,13 +180,15 @@ function showTranscriptionResults(result) {
     // Display transcription text
     elements.transcriptionText.textContent = result.transcription;
     
-    // Display segments if available
-    if (result.jsonData && result.jsonData.segments && result.jsonData.segments.length > 0) {
-        displaySegments(result.jsonData.segments);
-        elements.segmentsTab.disabled = false;
+    // Display SRT entries if available
+    if (result.srt && result.srt.length > 0) {
+        const srtEntries = parseSrt(result.srt);
+        displaySrtEntries(srtEntries);
+        elements.srtTab.disabled = false;
+        elements.srtTab.classList.remove('disabled');
     } else {
-        elements.segmentsTab.disabled = true;
-        elements.segmentsTab.classList.add('disabled');
+        elements.srtTab.disabled = true;
+        elements.srtTab.classList.add('disabled');
     }
     
     elements.resultsSection.classList.remove('hidden');
@@ -223,44 +225,6 @@ function displayMetadata(jsonData) {
     elements.metadataDate.textContent = `Date: ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function displaySegments(segments) {
-    elements.transcriptionSegments.innerHTML = '';
-    
-    segments.forEach((segment, index) => {
-        const segmentElement = document.createElement('div');
-        segmentElement.className = 'segment-item';
-        
-        const startTime = formatTime(segment.start);
-        const endTime = formatTime(segment.end);
-        const confidence = segment.confidence || 0;
-        const confidenceClass = getConfidenceClass(confidence);
-        
-        segmentElement.innerHTML = `
-            <div class="segment-header">
-                <span class="segment-time">${startTime} - ${endTime}</span>
-                <span class="segment-confidence ${confidenceClass}">
-                    ${Math.round(confidence * 100)}% confidence
-                </span>
-            </div>
-            <div class="segment-text">${segment.text}</div>
-        `;
-        
-        elements.transcriptionSegments.appendChild(segmentElement);
-    });
-}
-
-function formatTime(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
-function getConfidenceClass(confidence) {
-    if (confidence >= 0.8) return 'confidence-high';
-    if (confidence >= 0.6) return 'confidence-medium';
-    return 'confidence-low';
-}
-
 function switchTab(tabName) {
     // Update tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -269,8 +233,8 @@ function switchTab(tabName) {
     
     if (tabName === 'text') {
         elements.textTab.classList.add('active');
-    } else if (tabName === 'segments') {
-        elements.segmentsTab.classList.add('active');
+    } else if (tabName === 'srt') {
+        elements.srtTab.classList.add('active');
     }
     
     // Update tab content
@@ -280,8 +244,8 @@ function switchTab(tabName) {
     
     if (tabName === 'text') {
         elements.textView.classList.add('active');
-    } else if (tabName === 'segments') {
-        elements.segmentsView.classList.add('active');
+    } else if (tabName === 'srt') {
+        elements.srtView.classList.add('active');
     }
 }
 
@@ -399,20 +363,25 @@ function displayTranscriptions(transcriptions) {
         const date = new Date(transcription.createdAt).toLocaleDateString();
         const time = new Date(transcription.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
-        // Add JSON indicator
+        // Add JSON and SRT indicators
         const jsonIndicator = transcription.hasJson ? 
             '<span class="json-indicator" title="Has detailed segments and metadata"><i class="fas fa-code"></i></span>' : '';
+        const srtIndicator = transcription.hasSrt ? 
+            '<span class="srt-indicator" title="Has SRT subtitle file"><i class="fas fa-closed-captioning"></i></span>' : '';
         
         item.innerHTML = `
             <div class="transcription-item-header">
                 <h4>${transcription.fileName}</h4>
-                ${jsonIndicator}
+                <div class="indicators">
+                    ${jsonIndicator}
+                    ${srtIndicator}
+                </div>
             </div>
             <p>${preview}</p>
             <div class="transcription-item-footer">
                 <div class="date">${date} at ${time}</div>
                 <div class="format-indicator">
-                    ${transcription.hasJson ? 'JSON + TXT' : 'TXT only'}
+                    ${transcription.hasJson ? 'JSON + TXT' : 'TXT only'}${transcription.hasSrt ? ' + SRT' : ''}
                 </div>
             </div>
         `;
@@ -440,14 +409,15 @@ function loadTranscription(transcription) {
     // Display transcription text
     elements.transcriptionText.textContent = transcription.content;
     
-    // Display segments if available
-    if (transcription.jsonData && transcription.jsonData.segments && transcription.jsonData.segments.length > 0) {
-        displaySegments(transcription.jsonData.segments);
-        elements.segmentsTab.disabled = false;
-        elements.segmentsTab.classList.remove('disabled');
+    // Display SRT entries if available
+    if (transcription.srtData && transcription.srtData.length > 0) {
+        const srtEntries = parseSrt(transcription.srtData);
+        displaySrtEntries(srtEntries);
+        elements.srtTab.disabled = false;
+        elements.srtTab.classList.remove('disabled');
     } else {
-        elements.segmentsTab.disabled = true;
-        elements.segmentsTab.classList.add('disabled');
+        elements.srtTab.disabled = true;
+        elements.srtTab.classList.add('disabled');
     }
     
     elements.resultsSection.classList.remove('hidden');
@@ -519,4 +489,75 @@ window.addEventListener('error', (e) => {
 window.addEventListener('unhandledrejection', (e) => {
     showToast('An unexpected error occurred', 'error');
     console.error('Unhandled promise rejection:', e);
-}); 
+});
+
+function parseSrt(srtContent) {
+    if (!srtContent) return [];
+    
+    const entries = [];
+    const blocks = srtContent.trim().split('\n\n');
+    
+    for (const block of blocks) {
+        const lines = block.split('\n').filter(line => line.trim());
+        if (lines.length < 3) continue;
+        
+        // Skip the sequence number (first line)
+        const timeLine = lines[1];
+        const textLines = lines.slice(2);
+        
+        // Parse time line (format: "00:00:00,000 --> 00:00:00,000")
+        const timeMatch = timeLine.match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+        if (!timeMatch) continue;
+        
+        const startTime = parseFloat(timeMatch[1]) * 3600 + parseFloat(timeMatch[2]) * 60 + parseFloat(timeMatch[3]) + parseFloat(timeMatch[4]) / 1000;
+        const endTime = parseFloat(timeMatch[5]) * 3600 + parseFloat(timeMatch[6]) * 60 + parseFloat(timeMatch[7]) + parseFloat(timeMatch[8]) / 1000;
+        const text = textLines.join(' ').trim();
+        
+        entries.push({
+            startTime: startTime,
+            endTime: endTime,
+            text: text
+        });
+    }
+    
+    return entries;
+}
+
+function displaySrtEntries(srtEntries) {
+    elements.transcriptionSrt.innerHTML = '';
+    
+    if (srtEntries.length === 0) {
+        elements.transcriptionSrt.innerHTML = '<p style="color: #9CA3AF; text-align: center; padding: 20px;">No SRT data available</p>';
+        return;
+    }
+    
+    srtEntries.forEach((entry, index) => {
+        const entryElement = document.createElement('div');
+        entryElement.className = 'srt-entry';
+        
+        const startTime = formatTime(entry.startTime);
+        const endTime = formatTime(entry.endTime);
+        
+        entryElement.innerHTML = `
+            <div class="srt-entry-header">
+                <span class="srt-entry-number">#${index + 1}</span>
+                <span class="srt-entry-time">${startTime} - ${endTime}</span>
+            </div>
+            <div class="srt-entry-text">${entry.text}</div>
+        `;
+        
+        elements.transcriptionSrt.appendChild(entryElement);
+    });
+}
+
+function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function getConfidenceClass(confidence) {
+    if (confidence >= 0.8) return 'confidence-high';
+    if (confidence >= 0.6) return 'confidence-medium';
+    return 'confidence-low';
+} 

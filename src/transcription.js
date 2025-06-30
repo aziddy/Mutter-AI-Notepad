@@ -135,6 +135,7 @@ class TranscriptionService {
         '-f', audioPath,
         '-otxt',  // Output as text
         '-oj', // Output as JSON
+        '-osrt', // Output as SRT
         '-l', 'en' // Language
       ];
       
@@ -165,13 +166,15 @@ class TranscriptionService {
         console.log('Full stderr:', stderr);
         
         if (code === 0) {
-          // Read both output files
-          const textOutputFile = audioPath.replace(/\.[^/.]+$/, '.txt');
-          const jsonOutputFile = audioPath.replace(/\.[^/.]+$/, '.json');
-          console.log('Looking for output files:', textOutputFile, jsonOutputFile);
+          // Read all output files - Whisper keeps the full filename including extension
+          const textOutputFile = audioPath + '.txt';
+          const jsonOutputFile = audioPath + '.json';
+          const srtOutputFile = audioPath + '.srt';
+          console.log('Looking for output files:', textOutputFile, jsonOutputFile, srtOutputFile);
           
           let transcript = '';
           let jsonData = null;
+          let srtData = null;
           
           if (fs.existsSync(textOutputFile)) {
             transcript = fs.readFileSync(textOutputFile, 'utf8');
@@ -195,9 +198,21 @@ class TranscriptionService {
             }
           }
           
+          if (fs.existsSync(srtOutputFile)) {
+            try {
+              srtData = fs.readFileSync(srtOutputFile, 'utf8');
+              console.log('Found SRT output file, content length:', srtData.length);
+              // Clean up the SRT output file
+              fs.unlinkSync(srtOutputFile);
+            } catch (error) {
+              console.error('Failed to read SRT output:', error);
+            }
+          }
+          
           resolve({
             text: transcript.trim(),
-            json: jsonData
+            json: jsonData,
+            srt: srtData
           });
         } else {
           reject(new Error(`Whisper process failed with code ${code}. stderr: ${stderr}`));

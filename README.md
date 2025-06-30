@@ -12,6 +12,24 @@ A  desktop transcription app that processes audio and video files locally using 
 - npm or yarn package manager
 - FFmpeg (automatically included via ffmpeg-static)
 
+## Run Whisper Executable Directly
+
+``` bash
+cd /Mutter-AI-Notepad/node_modules/nodejs-whisper/cpp/whisper.cpp/build/bin
+```
+
+Outputs available Flags/Arguments:
+```bash
+./whisper-cli
+```
+
+Usage:
+```bash
+whisper <input_file> --model tiny --language en --output_format json
+```
+
+
+
 ## Installation
 
 1. **Clone the repository**:

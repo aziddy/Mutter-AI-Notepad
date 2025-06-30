@@ -64,12 +64,13 @@ ipcMain.handle('transcribe-file', async (event, filePath) => {
   try {
     const result = await transcribeAudio(filePath);
     
-    // Save transcription to both text and JSON files
+    // Save transcription to text, JSON, and SRT files
     console.log('transcribe-file generating save paths');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const baseFileName = `transcription-${timestamp}`;
     const textFileName = `${baseFileName}.txt`;
     const jsonFileName = `${baseFileName}.json`;
+    const srtFileName = `${baseFileName}.srt`;
     const saveDir = path.join(process.cwd(), 'transcriptions');
     
     console.log('transcribe-file save dir =', saveDir);
@@ -80,6 +81,14 @@ ipcMain.handle('transcribe-file', async (event, filePath) => {
     // Save text file
     const textPath = path.join(saveDir, textFileName);
     await fs.writeFile(textPath, result.text);
+    
+    // Save SRT file if available
+    let srtPath = null;
+    if (result.srt) {
+      console.log('transcribe-file saving SRT file');
+      srtPath = path.join(saveDir, srtFileName);
+      await fs.writeFile(srtPath, result.srt);
+    }
     
     // Save JSON file with metadata
     const jsonData = {
@@ -100,10 +109,13 @@ ipcMain.handle('transcribe-file', async (event, filePath) => {
     return {
       transcription: result.text,
       jsonData: jsonData,
+      srt: result.srt,
       savedPath: textPath,
       jsonPath: jsonPath,
+      srtPath: srtPath,
       fileName: textFileName,
-      jsonFileName: jsonFileName
+      jsonFileName: jsonFileName,
+      srtFileName: srtFileName
     };
   } catch (error) {
     throw new Error(`Transcription failed: ${error.message}`);
@@ -154,13 +166,29 @@ ipcMain.handle('get-transcriptions', async () => {
           const jsonData = JSON.parse(content);
           const baseFileName = file.replace('.json', '');
           
+          // Check if SRT file exists for this transcription
+          const srtFilePath = path.join(transcriptionsDir, `${baseFileName}.srt`);
+          const hasSrt = await fs.access(srtFilePath).then(() => true).catch(() => false);
+          
+          // Load SRT content if available
+          let srtData = null;
+          if (hasSrt) {
+            try {
+              srtData = await fs.readFile(srtFilePath, 'utf-8');
+            } catch (error) {
+              console.error('Failed to read SRT file:', srtFilePath, error);
+            }
+          }
+          
           transcriptions.push({
             fileName: baseFileName,
             content: jsonData.text,
             jsonData: jsonData,
+            srtData: srtData,
             createdAt: stats.birthtime,
             size: stats.size,
-            hasJson: true
+            hasJson: true,
+            hasSrt: hasSrt
           });
           
           processedFiles.add(baseFileName);
@@ -184,13 +212,29 @@ ipcMain.handle('get-transcriptions', async () => {
         const content = await fs.readFile(filePath, 'utf-8');
         const stats = await fs.stat(filePath);
         
+        // Check if SRT file exists for this transcription
+        const srtFilePath = path.join(transcriptionsDir, `${baseFileName}.srt`);
+        const hasSrt = await fs.access(srtFilePath).then(() => true).catch(() => false);
+        
+        // Load SRT content if available
+        let srtData = null;
+        if (hasSrt) {
+          try {
+            srtData = await fs.readFile(srtFilePath, 'utf-8');
+          } catch (error) {
+            console.error('Failed to read SRT file:', srtFilePath, error);
+          }
+        }
+        
         transcriptions.push({
           fileName: baseFileName,
           content,
           jsonData: null,
+          srtData: srtData,
           createdAt: stats.birthtime,
           size: stats.size,
-          hasJson: false
+          hasJson: false,
+          hasSrt: hasSrt
         });
       }
     }

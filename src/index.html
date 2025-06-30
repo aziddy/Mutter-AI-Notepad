@@ -123,6 +123,39 @@
                         </div>
 
                         <div id="srtView" class="tab-content">
+                            <!-- Audio Player -->
+                            <div id="audioPlayerSection" class="audio-player-section hidden">
+                                <div class="audio-player">
+                                    <audio id="audioPlayer" preload="metadata">
+                                        Your browser does not support the audio element.
+                                    </audio>
+                                    <div class="audio-controls">
+                                        <button id="playPauseBtn" class="btn btn-icon" title="Play/Pause">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <div class="audio-progress">
+                                            <span id="currentTime" class="time-display">0:00</span>
+                                            <div class="progress-bar">
+                                                <div id="progressBar" class="progress-fill"></div>
+                                                <input type="range" id="progressSlider" class="progress-slider" min="0"
+                                                    max="100" value="0">
+                                            </div>
+                                            <span id="totalTime" class="time-display">0:00</span>
+                                        </div>
+                                        <div class="audio-volume">
+                                            <button id="muteBtn" class="btn btn-icon" title="Mute/Unmute">
+                                                <i class="fas fa-volume-up"></i>
+                                            </button>
+                                            <input type="range" id="volumeSlider" class="volume-slider" min="0"
+                                                max="100" value="100">
+                                        </div>
+                                    </div>
+                                    <div class="audio-help">
+                                        <small>Keyboard shortcuts: Space (play/pause), ← → (seek 5s), Click SRT entries
+                                            to jump</small>
+                                    </div>
+                                </div>
+                            </div>
                             <div id="transcriptionSrt" class="transcription-srt">
                                 <!-- SRT entries will be loaded here -->
                             </div>

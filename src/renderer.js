@@ -3,6 +3,13 @@ let currentTranscription = '';
 let currentJsonData = null;
 let currentApiKey = localStorage.getItem('openai_api_key') || '';
 
+// Audio Player State
+let currentAudioFile = null;
+let srtEntries = [];
+let isPlaying = false;
+let currentPlayingEntry = null;
+let audioSyncEnabled = true;
+
 // DOM Elements
 const elements = {
     selectFileBtn: document.getElementById('selectFileBtn'),
@@ -28,6 +35,17 @@ const elements = {
     textView: document.getElementById('textView'),
     srtView: document.getElementById('srtView'),
     transcriptionSrt: document.getElementById('transcriptionSrt'),
+    
+    // Audio Player Elements
+    audioPlayerSection: document.getElementById('audioPlayerSection'),
+    audioPlayer: document.getElementById('audioPlayer'),
+    playPauseBtn: document.getElementById('playPauseBtn'),
+    currentTime: document.getElementById('currentTime'),
+    totalTime: document.getElementById('totalTime'),
+    progressBar: document.getElementById('progressBar'),
+    progressSlider: document.getElementById('progressSlider'),
+    muteBtn: document.getElementById('muteBtn'),
+    volumeSlider: document.getElementById('volumeSlider'),
     
     // AI Features
     apiKeyInput: document.getElementById('apiKeyInput'),
@@ -100,6 +118,44 @@ function setupEventListeners() {
     elements.apiKeyInput.addEventListener('input', () => {
         elements.saveApiKeyBtn.disabled = !elements.apiKeyInput.value.trim();
     });
+    
+    // Keyboard shortcuts for audio player
+    document.addEventListener('keydown', (e) => {
+        // Only handle shortcuts when SRT tab is active and audio is available
+        if (elements.srtTab.classList.contains('active') && currentAudioFile) {
+            switch (e.code) {
+                case 'Space':
+                    e.preventDefault();
+                    togglePlayPause();
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    elements.audioPlayer.currentTime = Math.max(0, elements.audioPlayer.currentTime - 5);
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    elements.audioPlayer.currentTime = Math.min(elements.audioPlayer.duration, elements.audioPlayer.currentTime + 5);
+                    break;
+            }
+        }
+    });
+    
+    // Audio Player Events
+    elements.playPauseBtn.addEventListener('click', togglePlayPause);
+    elements.progressSlider.addEventListener('input', seekAudio);
+    elements.volumeSlider.addEventListener('input', setVolume);
+    elements.muteBtn.addEventListener('click', toggleMute);
+    elements.audioPlayer.addEventListener('timeupdate', updateAudioProgress);
+    elements.audioPlayer.addEventListener('loadedmetadata', onAudioLoaded);
+    elements.audioPlayer.addEventListener('ended', onAudioEnded);
+    elements.audioPlayer.addEventListener('play', () => {
+        isPlaying = true;
+        updatePlayPauseButton();
+    });
+    elements.audioPlayer.addEventListener('pause', () => {
+        isPlaying = false;
+        updatePlayPauseButton();
+    });
 }
 
 async function selectFile() {
@@ -168,6 +224,9 @@ function hideProgress() {
 function showTranscriptionResults(result) {
     hideProgress();
     
+    // Reset audio player for new transcription
+    resetAudioPlayer();
+    
     currentTranscription = result.transcription;
     currentJsonData = result.jsonData;
     
@@ -183,13 +242,19 @@ function showTranscriptionResults(result) {
     
     // Display SRT entries if available
     if (result.srt && result.srt.length > 0) {
-        const srtEntries = parseSrt(result.srt);
+        srtEntries = parseSrt(result.srt);
         displaySrtEntries(srtEntries);
         elements.srtTab.disabled = false;
         elements.srtTab.classList.remove('disabled');
+        
+        // Initialize audio player if audio source file is available
+        if (result.jsonData?.metadata?.audioSourceFile) {
+            initializeAudioPlayer(result.jsonData.metadata.audioSourceFile, srtEntries);
+        }
     } else {
         elements.srtTab.disabled = true;
         elements.srtTab.classList.add('disabled');
+        elements.audioPlayerSection.classList.add('hidden');
     }
     
     elements.resultsSection.classList.remove('hidden');
@@ -254,8 +319,14 @@ function switchTab(tabName) {
     
     if (tabName === 'text') {
         elements.textView.classList.add('active');
+        // Hide audio player when switching to text view
+        elements.audioPlayerSection.classList.add('hidden');
     } else if (tabName === 'srt') {
         elements.srtView.classList.add('active');
+        // Show audio player if available
+        if (currentAudioFile && srtEntries.length > 0) {
+            elements.audioPlayerSection.classList.remove('hidden');
+        }
     }
 }
 
@@ -409,6 +480,10 @@ function displayTranscriptions(transcriptions) {
 
 function loadTranscription(transcription) {
     hideWelcomeScreen();
+    
+    // Reset audio player for loaded transcription
+    resetAudioPlayer();
+    
     currentTranscription = transcription.content;
     currentJsonData = transcription.jsonData;
     
@@ -424,13 +499,19 @@ function loadTranscription(transcription) {
     
     // Display SRT entries if available
     if (transcription.srtData && transcription.srtData.length > 0) {
-        const srtEntries = parseSrt(transcription.srtData);
+        srtEntries = parseSrt(transcription.srtData);
         displaySrtEntries(srtEntries);
         elements.srtTab.disabled = false;
         elements.srtTab.classList.remove('disabled');
+        
+        // Initialize audio player if audio source file is available
+        if (transcription.jsonData?.metadata?.audioSourceFile) {
+            initializeAudioPlayer(transcription.jsonData.metadata.audioSourceFile, srtEntries);
+        }
     } else {
         elements.srtTab.disabled = true;
         elements.srtTab.classList.add('disabled');
+        elements.audioPlayerSection.classList.add('hidden');
     }
     
     elements.resultsSection.classList.remove('hidden');
@@ -559,6 +640,9 @@ function displaySrtEntries(srtEntries) {
             <div class="srt-entry-text">${entry.text}</div>
         `;
         
+        // Add click handler
+        entryElement.addEventListener('click', () => onSrtEntryClick(entry));
+        
         elements.transcriptionSrt.appendChild(entryElement);
     });
 }
@@ -573,4 +657,224 @@ function getConfidenceClass(confidence) {
     if (confidence >= 0.8) return 'confidence-high';
     if (confidence >= 0.6) return 'confidence-medium';
     return 'confidence-low';
+}
+
+// Audio Player Functions
+function resetAudioPlayer() {
+    if (elements.audioPlayer) {
+        elements.audioPlayer.pause();
+        elements.audioPlayer.currentTime = 0;
+    }
+    currentAudioFile = null;
+    srtEntries = [];
+    isPlaying = false;
+    currentPlayingEntry = null;
+    elements.audioPlayerSection.classList.add('hidden');
+    clearPlayingEntry();
+}
+
+function initializeAudioPlayer(audioFilePath, entries) {
+    currentAudioFile = audioFilePath;
+    srtEntries = entries;
+    
+    // Set audio source
+    elements.audioPlayer.src = `file://${audioFilePath}`;
+    
+    // Show audio player section
+    elements.audioPlayerSection.classList.remove('hidden');
+    
+    // Reset player state
+    isPlaying = false;
+    currentPlayingEntry = null;
+    updatePlayPauseButton();
+    
+    // Show loading state
+    elements.playPauseBtn.disabled = true;
+    elements.playPauseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    elements.playPauseBtn.title = 'Loading...';
+}
+
+function togglePlayPause() {
+    if (!currentAudioFile) return;
+    
+    if (isPlaying) {
+        elements.audioPlayer.pause();
+    } else {
+        elements.audioPlayer.play();
+    }
+}
+
+function updatePlayPauseButton() {
+    const icon = elements.playPauseBtn.querySelector('i');
+    if (isPlaying) {
+        icon.className = 'fas fa-pause';
+        elements.playPauseBtn.title = 'Pause';
+    } else {
+        icon.className = 'fas fa-play';
+        elements.playPauseBtn.title = 'Play';
+    }
+}
+
+function seekAudio() {
+    if (!currentAudioFile) return;
+    
+    const seekTime = (elements.progressSlider.value / 100) * elements.audioPlayer.duration;
+    elements.audioPlayer.currentTime = seekTime;
+    
+    // Temporarily disable sync to prevent jumping
+    audioSyncEnabled = false;
+    setTimeout(() => {
+        audioSyncEnabled = true;
+    }, 100);
+}
+
+function setVolume() {
+    const volume = elements.volumeSlider.value / 100;
+    elements.audioPlayer.volume = volume;
+    
+    // Update mute button icon
+    const icon = elements.muteBtn.querySelector('i');
+    if (volume === 0) {
+        icon.className = 'fas fa-volume-mute';
+    } else if (volume < 0.5) {
+        icon.className = 'fas fa-volume-down';
+    } else {
+        icon.className = 'fas fa-volume-up';
+    }
+}
+
+function toggleMute() {
+    if (elements.audioPlayer.volume > 0) {
+        elements.audioPlayer.volume = 0;
+        elements.volumeSlider.value = 0;
+    } else {
+        elements.audioPlayer.volume = 1;
+        elements.volumeSlider.value = 100;
+    }
+    setVolume();
+}
+
+function updateAudioProgress() {
+    if (!currentAudioFile || !audioSyncEnabled) return;
+    
+    const currentTime = elements.audioPlayer.currentTime;
+    const duration = elements.audioPlayer.duration;
+    
+    // Update time displays
+    elements.currentTime.textContent = formatTime(currentTime);
+    elements.totalTime.textContent = formatTime(duration);
+    
+    // Update progress bar
+    const progress = (currentTime / duration) * 100;
+    elements.progressBar.style.width = `${progress}%`;
+    elements.progressSlider.value = progress;
+    
+    // Sync with SRT entries
+    syncWithSrtEntries(currentTime);
+}
+
+function onAudioLoaded() {
+    elements.totalTime.textContent = formatTime(elements.audioPlayer.duration);
+    setVolume(); // Initialize volume
+    
+    // Enable play button and show correct icon
+    elements.playPauseBtn.disabled = false;
+    elements.playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+    elements.playPauseBtn.title = 'Play';
+}
+
+function onAudioEnded() {
+    isPlaying = false;
+    updatePlayPauseButton();
+    clearPlayingEntry();
+}
+
+function syncWithSrtEntries(currentTime) {
+    if (!srtEntries.length) return;
+    
+    // Find the current SRT entry
+    let currentEntry = null;
+    for (let i = 0; i < srtEntries.length; i++) {
+        const entry = srtEntries[i];
+        if (currentTime >= entry.startTime && currentTime <= entry.endTime) {
+            currentEntry = entry;
+            break;
+        }
+    }
+    
+    // Update playing entry
+    if (currentEntry !== currentPlayingEntry) {
+        clearPlayingEntry();
+        if (currentEntry) {
+            highlightPlayingEntry(currentEntry);
+        }
+    }
+}
+
+function highlightPlayingEntry(entry) {
+    currentPlayingEntry = entry;
+    
+    // Find and highlight the corresponding DOM element
+    const entryElements = elements.transcriptionSrt.querySelectorAll('.srt-entry');
+    entryElements.forEach((element, index) => {
+        if (srtEntries[index] === entry) {
+            element.classList.add('playing');
+            
+            // Update the time display to show current position
+            const timeElement = element.querySelector('.srt-entry-time');
+            if (timeElement) {
+                const currentTime = elements.audioPlayer.currentTime;
+                const startTime = formatTime(entry.startTime);
+                const endTime = formatTime(entry.endTime);
+                const currentTimeStr = formatTime(currentTime);
+                timeElement.textContent = `${startTime} - ${endTime} (${currentTimeStr})`;
+            }
+            
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            // Reset other entries to normal display
+            element.classList.remove('playing');
+            const timeElement = element.querySelector('.srt-entry-time');
+            if (timeElement) {
+                const startTime = formatTime(srtEntries[index].startTime);
+                const endTime = formatTime(srtEntries[index].endTime);
+                timeElement.textContent = `${startTime} - ${endTime}`;
+            }
+        }
+    });
+}
+
+function clearPlayingEntry() {
+    if (currentPlayingEntry) {
+        const entryElements = elements.transcriptionSrt.querySelectorAll('.srt-entry');
+        entryElements.forEach((element, index) => {
+            element.classList.remove('playing');
+            // Reset time display to normal format
+            const timeElement = element.querySelector('.srt-entry-time');
+            if (timeElement && srtEntries[index]) {
+                const startTime = formatTime(srtEntries[index].startTime);
+                const endTime = formatTime(srtEntries[index].endTime);
+                timeElement.textContent = `${startTime} - ${endTime}`;
+            }
+        });
+        currentPlayingEntry = null;
+    }
+}
+
+// SRT Entry Click Handler
+function onSrtEntryClick(entry) {
+    if (!currentAudioFile) return;
+    
+    // Seek to the start time of the entry
+    elements.audioPlayer.currentTime = entry.startTime;
+    
+    // Temporarily disable sync to prevent jumping
+    audioSyncEnabled = false;
+    setTimeout(() => {
+        audioSyncEnabled = true;
+    }, 100);
+    
+    // Highlight the clicked entry
+    clearPlayingEntry();
+    highlightPlayingEntry(entry);
 } 

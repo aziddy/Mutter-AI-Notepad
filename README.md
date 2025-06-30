@@ -15,7 +15,7 @@ A  desktop transcription app that processes audio and video files locally using 
 ## Run Whisper Executable Directly
 
 ``` bash
-cd /Mutter-AI-Notepad/node_modules/nodejs-whisper/cpp/whisper.cpp/build/bin
+cd node_modules/nodejs-whisper/cpp/whisper.cpp/build/bin
 ```
 
 Outputs available Flags/Arguments:

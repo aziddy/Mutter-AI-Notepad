@@ -78,15 +78,19 @@ ipcMain.handle('transcribe-file', async (event, filePath) => {
     // Ensure transcriptions directory exists
     await fs.mkdir(saveDir, { recursive: true });
     
+    // Create individual folder for this transcription
+    const transcriptionFolder = path.join(saveDir, baseFileName);
+    await fs.mkdir(transcriptionFolder, { recursive: true });
+    
     // Save text file
-    const textPath = path.join(saveDir, textFileName);
+    const textPath = path.join(transcriptionFolder, textFileName);
     await fs.writeFile(textPath, result.text);
     
     // Save SRT file if available
     let srtPath = null;
     if (result.srt) {
       console.log('transcribe-file saving SRT file');
-      srtPath = path.join(saveDir, srtFileName);
+      srtPath = path.join(transcriptionFolder, srtFileName);
       await fs.writeFile(srtPath, result.srt);
     }
     
@@ -103,7 +107,7 @@ ipcMain.handle('transcribe-file', async (event, filePath) => {
       }
     };
     
-    const jsonPath = path.join(saveDir, jsonFileName);
+    const jsonPath = path.join(transcriptionFolder, jsonFileName);
     await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2));
     
     return {
@@ -115,7 +119,8 @@ ipcMain.handle('transcribe-file', async (event, filePath) => {
       srtPath: srtPath,
       fileName: textFileName,
       jsonFileName: jsonFileName,
-      srtFileName: srtFileName
+      srtFileName: srtFileName,
+      folderPath: transcriptionFolder
     };
   } catch (error) {
     throw new Error(`Transcription failed: ${error.message}`);
@@ -151,91 +156,61 @@ ipcMain.handle('get-transcriptions', async () => {
     const transcriptionsDir = path.join(process.cwd(), 'transcriptions');
     await fs.mkdir(transcriptionsDir, { recursive: true });
     
-    const files = await fs.readdir(transcriptionsDir);
+    const folders = await fs.readdir(transcriptionsDir);
     const transcriptions = [];
-    const processedFiles = new Set();
     
-    // First, process JSON files (they contain more metadata)
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        const filePath = path.join(transcriptionsDir, file);
-        const content = await fs.readFile(filePath, 'utf-8');
-        const stats = await fs.stat(filePath);
+    // Process each transcription folder
+    for (const folder of folders) {
+      const folderPath = path.join(transcriptionsDir, folder);
+      const folderStats = await fs.stat(folderPath);
+      
+      // Skip if it's not a directory or doesn't follow the transcription naming pattern
+      if (!folderStats.isDirectory() || !folder.startsWith('transcription-')) {
+        continue;
+      }
+      
+      try {
+        const files = await fs.readdir(folderPath);
+        let jsonData = null;
+        let textContent = null;
+        let srtData = null;
+        let hasJson = false;
+        let hasSrt = false;
         
-        try {
-          const jsonData = JSON.parse(content);
-          const baseFileName = file.replace('.json', '');
-          
-          // Check if SRT file exists for this transcription
-          const srtFilePath = path.join(transcriptionsDir, `${baseFileName}.srt`);
-          const hasSrt = await fs.access(srtFilePath).then(() => true).catch(() => false);
-          
-          // Load SRT content if available
-          let srtData = null;
-          if (hasSrt) {
-            try {
-              srtData = await fs.readFile(srtFilePath, 'utf-8');
-            } catch (error) {
-              console.error('Failed to read SRT file:', srtFilePath, error);
-            }
+        // Look for files in the transcription folder
+        for (const file of files) {
+          if (file.endsWith('.json')) {
+            const jsonPath = path.join(folderPath, file);
+            const content = await fs.readFile(jsonPath, 'utf-8');
+            jsonData = JSON.parse(content);
+            textContent = jsonData.text;
+            hasJson = true;
+          } else if (file.endsWith('.txt')) {
+            const txtPath = path.join(folderPath, file);
+            textContent = await fs.readFile(txtPath, 'utf-8');
+          } else if (file.endsWith('.srt')) {
+            const srtPath = path.join(folderPath, file);
+            srtData = await fs.readFile(srtPath, 'utf-8');
+            hasSrt = true;
           }
-          
+        }
+        
+        // If we found content, add it to transcriptions
+        if (textContent) {
           transcriptions.push({
-            fileName: baseFileName,
-            content: jsonData.text,
+            fileName: folder,
+            content: textContent,
             jsonData: jsonData,
             srtData: srtData,
-            createdAt: stats.birthtime,
-            size: stats.size,
-            hasJson: true,
-            hasSrt: hasSrt
+            createdAt: folderStats.birthtime,
+            size: folderStats.size,
+            hasJson: hasJson,
+            hasSrt: hasSrt,
+            folderPath: folderPath
           });
-          
-          processedFiles.add(baseFileName);
-        } catch (error) {
-          console.error('Failed to parse JSON file:', file, error);
         }
-      }
-    }
-    
-    // Then process text files that don't have corresponding JSON files
-    for (const file of files) {
-      if (file.endsWith('.txt')) {
-        const baseFileName = file.replace('.txt', '');
-        
-        // Skip if we already processed this file as JSON
-        if (processedFiles.has(baseFileName)) {
-          continue;
-        }
-        
-        const filePath = path.join(transcriptionsDir, file);
-        const content = await fs.readFile(filePath, 'utf-8');
-        const stats = await fs.stat(filePath);
-        
-        // Check if SRT file exists for this transcription
-        const srtFilePath = path.join(transcriptionsDir, `${baseFileName}.srt`);
-        const hasSrt = await fs.access(srtFilePath).then(() => true).catch(() => false);
-        
-        // Load SRT content if available
-        let srtData = null;
-        if (hasSrt) {
-          try {
-            srtData = await fs.readFile(srtFilePath, 'utf-8');
-          } catch (error) {
-            console.error('Failed to read SRT file:', srtFilePath, error);
-          }
-        }
-        
-        transcriptions.push({
-          fileName: baseFileName,
-          content,
-          jsonData: null,
-          srtData: srtData,
-          createdAt: stats.birthtime,
-          size: stats.size,
-          hasJson: false,
-          hasSrt: hasSrt
-        });
+      } catch (error) {
+        console.error('Failed to process transcription folder:', folder, error);
       }
     }
     

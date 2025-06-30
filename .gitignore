@@ -138,9 +138,5 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-/transcriptions/*.txt
-/transcriptions/*.json
-/transcriptions/*.srt
-/transcriptions/*.vtt
-/transcriptions/*.csv
-/transcriptions/*.jsonl
+# Transcription files (now in individual folders)
+/transcriptions/*/

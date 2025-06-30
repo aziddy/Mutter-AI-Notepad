@@ -62,15 +62,9 @@ ipcMain.handle('select-file', async () => {
 ipcMain.handle('transcribe-file', async (event, filePath) => {
   console.log('transcribe-file given file path =', filePath);
   try {
-    const result = await transcribeAudio(filePath);
-    
-    // Save transcription to text, JSON, and SRT files
-    console.log('transcribe-file generating save paths');
+    // Create transcription folder first
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const baseFileName = `transcription-${timestamp}`;
-    const textFileName = `${baseFileName}.txt`;
-    const jsonFileName = `${baseFileName}.json`;
-    const srtFileName = `${baseFileName}.srt`;
     const saveDir = path.join(process.cwd(), 'transcriptions');
     
     console.log('transcribe-file save dir =', saveDir);
@@ -81,6 +75,15 @@ ipcMain.handle('transcribe-file', async (event, filePath) => {
     // Create individual folder for this transcription
     const transcriptionFolder = path.join(saveDir, baseFileName);
     await fs.mkdir(transcriptionFolder, { recursive: true });
+    
+    // Pass the transcription folder to the transcribe function
+    const result = await transcribeAudio(filePath, transcriptionFolder);
+    
+    // Save transcription to text, JSON, and SRT files
+    console.log('transcribe-file generating save paths');
+    const textFileName = `${baseFileName}.txt`;
+    const jsonFileName = `${baseFileName}.json`;
+    const srtFileName = `${baseFileName}.srt`;
     
     // Save text file
     const textPath = path.join(transcriptionFolder, textFileName);
@@ -103,7 +106,10 @@ ipcMain.handle('transcribe-file', async (event, filePath) => {
         originalFile: filePath,
         transcribedAt: new Date().toISOString(),
         duration: result.json?.duration || null,
-        wordCount: result.text.split(/\s+/).length
+        wordCount: result.text.split(/\s+/).length,
+        audioSourceFile: path.extname(filePath).toLowerCase() === '.wav' ? 
+          path.join(transcriptionFolder, `${path.basename(filePath, '.wav')}_audio_source.wav`) : 
+          path.join(transcriptionFolder, `${path.basename(filePath, path.extname(filePath))}_audio_source.wav`)
       }
     };
     

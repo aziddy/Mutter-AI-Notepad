@@ -22,6 +22,7 @@ const elements = {
     metadataLanguage: document.getElementById('metadataLanguage'),
     metadataWordCount: document.getElementById('metadataWordCount'),
     metadataDate: document.getElementById('metadataDate'),
+    metadataAudioSource: document.getElementById('metadataAudioSource'),
     textTab: document.getElementById('textTab'),
     srtTab: document.getElementById('srtTab'),
     textView: document.getElementById('textView'),
@@ -223,6 +224,15 @@ function displayMetadata(jsonData) {
     // Date
     const date = new Date(jsonData.metadata.transcribedAt);
     elements.metadataDate.textContent = `Date: ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    
+    // Audio source file
+    if (jsonData.metadata.audioSourceFile) {
+        const audioFileName = jsonData.metadata.audioSourceFile.split(/[\\/]/).pop();
+        elements.metadataAudioSource.textContent = `Audio: ${audioFileName}`;
+        elements.metadataAudioSource.title = jsonData.metadata.audioSourceFile;
+    } else {
+        elements.metadataAudioSource.textContent = 'Audio: --';
+    }
 }
 
 function switchTab(tabName) {
@@ -368,6 +378,8 @@ function displayTranscriptions(transcriptions) {
             '<span class="json-indicator" title="Has detailed segments and metadata"><i class="fas fa-code"></i></span>' : '';
         const srtIndicator = transcription.hasSrt ? 
             '<span class="srt-indicator" title="Has SRT subtitle file"><i class="fas fa-closed-captioning"></i></span>' : '';
+        const audioIndicator = transcription.jsonData?.metadata?.audioSourceFile ? 
+            '<span class="audio-indicator" title="Has audio source file"><i class="fas fa-music"></i></span>' : '';
         
         item.innerHTML = `
             <div class="transcription-item-header">
@@ -375,6 +387,7 @@ function displayTranscriptions(transcriptions) {
                 <div class="indicators">
                     ${jsonIndicator}
                     ${srtIndicator}
+                    ${audioIndicator}
                 </div>
             </div>
             <p>${preview}</p>

@@ -93,7 +93,7 @@ class TranscriptionService {
     });
   }
 
-  async transcribe(filePath) {
+  async transcribe(filePath, outputDir = null) {
     try {
       await this.initialize();
       
@@ -103,16 +103,34 @@ class TranscriptionService {
       const ext = path.extname(filePath).toLowerCase();
       let audioPath = filePath;
       let tempFile = false;
+      let wavFileToCopy = null;
       
       if (!['.wav', '.mp3'].includes(ext)) {
         console.log('Converting file to WAV format...');
         audioPath = await this.convertToWav(filePath);
         tempFile = true;
+        wavFileToCopy = audioPath;
+      } else if (ext === '.wav') {
+        // If it's already a WAV file, we can copy it directly
+        wavFileToCopy = filePath;
       }
       
       // Use direct whisper binary call
       const modelPath = path.join(this.modelsPath, 'ggml-base.en.bin');
       const transcript = await this.runWhisper(audioPath, modelPath);
+      
+      // Copy WAV file to output directory if specified
+      if (outputDir && wavFileToCopy && fs.existsSync(wavFileToCopy)) {
+        try {
+          const originalFileName = path.basename(filePath, path.extname(filePath));
+          const wavFileName = `${originalFileName}_audio_source.wav`;
+          const wavDestPath = path.join(outputDir, wavFileName);
+          fs.copyFileSync(wavFileToCopy, wavDestPath);
+          console.log(`WAV file copied to: ${wavDestPath}`);
+        } catch (copyError) {
+          console.error('Failed to copy WAV file:', copyError);
+        }
+      }
       
       // Clean up temporary file
       if (tempFile && fs.existsSync(audioPath)) {
@@ -229,8 +247,8 @@ class TranscriptionService {
 
 const transcriptionService = new TranscriptionService();
 
-async function transcribeAudio(filePath) {
-  return await transcriptionService.transcribe(filePath);
+async function transcribeAudio(filePath, outputDir = null) {
+  return await transcriptionService.transcribe(filePath, outputDir);
 }
 
 module.exports = {

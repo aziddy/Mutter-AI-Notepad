@@ -29,7 +29,6 @@ whisper <input_file> --model tiny --language en --output_format json
 ```
 
 
-
 ## Installation
 
 1. **Clone the repository**:

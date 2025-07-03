@@ -140,3 +140,6 @@ vite.config.ts.timestamp-*
 
 # Transcription files (now in individual folders)
 /transcriptions/*/
+
+
+/models/*

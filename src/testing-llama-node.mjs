@@ -6,7 +6,8 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const modelPath = path.join(__dirname, "..", "models", "qwen3-0.6b", "qwen3-0.6b.q4_0.gguf");
+// const modelPath = path.join(__dirname, "..", "models", "qwen3-0.6b", "qwen3-0.6b.q4_0.gguf");
+const modelPath = path.join(__dirname, "..", "models", "qwen3-0.6b", "qwen3-0.6b.q8_0.gguf");
 
 console.log("Model path:", modelPath);
 
@@ -27,6 +28,7 @@ console.log("Model file found, initializing LLM...");
 // Initialize the LLM with node-llama-cpp
 const llama = await getLlama();
 const model = await llama.loadModel({
+    temperature: 0.3,
     modelPath: modelPath,
     contextSize: 8192,
     threads: 4,

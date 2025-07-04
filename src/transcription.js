@@ -4,6 +4,13 @@ const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
 
+const whisperModels = {
+  "ggml-base.en.bin": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin",
+  "ggml-large-v3-turbo.bin": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"
+}
+
+const modelToUse = "ggml-large-v3-turbo.bin";
+
 // Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
@@ -22,7 +29,7 @@ class TranscriptionService {
       }
       
       // Check if model exists, if not download it
-      const modelPath = path.join(this.modelsPath, 'ggml-base.en.bin');
+      const modelPath = path.join(this.modelsPath, modelToUse);
       if (!fs.existsSync(modelPath)) {
         console.log('Model not found, downloading...');
         await this.downloadModel();
@@ -36,8 +43,8 @@ class TranscriptionService {
   async downloadModel() {
     return new Promise((resolve, reject) => {
       const https = require('https');
-      const modelUrl = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin';
-      const modelPath = path.join(this.modelsPath, 'ggml-base.en.bin');
+      const modelUrl = whisperModels[modelToUse];
+      const modelPath = path.join(this.modelsPath, modelToUse);
       
       // Ensure models directory exists
       if (!fs.existsSync(this.modelsPath)) {
@@ -45,29 +52,64 @@ class TranscriptionService {
       }
       
       console.log('Downloading model from:', modelUrl);
-      const file = fs.createWriteStream(modelPath);
       
-      https.get(modelUrl, (response) => {
-        if (response.statusCode !== 200) {
-          reject(new Error(`Failed to download model: ${response.statusCode}`));
+      const downloadWithRedirect = (url, maxRedirects = 5) => {
+        if (maxRedirects <= 0) {
+          reject(new Error('Too many redirects'));
           return;
         }
         
-        response.pipe(file);
+        const file = fs.createWriteStream(modelPath);
         
-        file.on('finish', () => {
+        https.get(url, (response) => {
+          console.log('Response status:', response.statusCode);
+          console.log('Response headers:', response.headers);
+          
+          // Handle redirects
+          if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307 || response.statusCode === 308) {
+            const location = response.headers.location;
+            if (!location) {
+              reject(new Error('Redirect response missing Location header'));
+              return;
+            }
+            
+            console.log('Following redirect to:', location);
+            file.close();
+            fs.unlink(modelPath, () => {}); // Clean up partial file
+            
+            // Handle relative URLs
+            const redirectUrl = location.startsWith('http') ? location : new URL(location, url).href;
+            downloadWithRedirect(redirectUrl, maxRedirects - 1);
+            return;
+          }
+          
+          // Handle successful response
+          if (response.statusCode === 200) {
+            response.pipe(file);
+            
+            file.on('finish', () => {
+              file.close();
+              console.log('Model downloaded successfully');
+              resolve();
+            });
+            
+            file.on('error', (err) => {
+              fs.unlink(modelPath, () => {}); // Delete the file async
+              reject(err);
+            });
+          } else {
+            file.close();
+            fs.unlink(modelPath, () => {}); // Clean up partial file
+            reject(new Error(`Failed to download model: ${response.statusCode} - ${response.statusMessage}`));
+          }
+        }).on('error', (err) => {
           file.close();
-          console.log('Model downloaded successfully');
-          resolve();
-        });
-        
-        file.on('error', (err) => {
-          fs.unlink(modelPath, () => {}); // Delete the file async
+          fs.unlink(modelPath, () => {}); // Clean up partial file
           reject(err);
         });
-      }).on('error', (err) => {
-        reject(err);
-      });
+      };
+      
+      downloadWithRedirect(modelUrl);
     });
   }
 
@@ -116,7 +158,7 @@ class TranscriptionService {
       }
       
       // Use direct whisper binary call
-      const modelPath = path.join(this.modelsPath, 'ggml-base.en.bin');
+      const modelPath = path.join(this.modelsPath, modelToUse);
       const transcript = await this.runWhisper(audioPath, modelPath);
       
       // Copy WAV file to output directory if specified

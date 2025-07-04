@@ -28,6 +28,12 @@ Usage:
 whisper <input_file> --model tiny --language en --output_format json
 ```
 
+## Unified RAM Usage
+
+- Whisper-Large-V3-Turbo: 2GB
+- Qwen3-1.7b-8Bit: 4.6GB
+
+
 
 ## Installation
 

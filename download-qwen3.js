@@ -6,7 +6,7 @@ const { promisify } = require('util');
 
 const pipelineAsync = promisify(pipeline);
 
-// Configuration - Using Unsloth's Qwen3-0.6B-GGUF model
+// Configuration - Using Unsloth's Qwen3 models
 const MODEL_NAME = 'qwen3-0.6b';
 const MODELS_DIR = path.join(__dirname, 'models');
 const MODEL_DIR = path.join(MODELS_DIR, 'qwen3-0.6b');
@@ -18,6 +18,26 @@ const GGUF_URLS = {
     'q5_k_s': 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q5_K_S.gguf',
     'q5_k_m': 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q5_K_M.gguf',
     'q8_0': 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf'
+};
+
+// Qwen3-1.7B model URLs
+const QWEN3_1_7B_URLS = {
+    'q4_0': 'https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf?download=true', // 1.06GB | 4.6GB of RAM | Alot Faster than q8_0
+    'q8_0': 'https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q8_0.gguf?download=true'  // 1.83GB | 4.6GB of RAM
+};
+
+// All available models
+const ALL_MODELS = {
+    'qwen3-0.6b': {
+        name: 'Qwen3-0.6B',
+        urls: GGUF_URLS,
+        default_quant: 'q4_0'
+    },
+    'qwen3-1.7b': {
+        name: 'Qwen3-1.7B',
+        urls: QWEN3_1_7B_URLS,
+        default_quant: 'q8_0'
+    }
 };
 
 // Test URL accessibility
@@ -49,12 +69,18 @@ async function testUrl(url) {
 }
 
 // Test all URLs and show results
-async function testAllUrls() {
-    console.log('Testing Unsloth Qwen3-0.6B-GGUF model URLs...\n');
+async function testAllUrls(modelName = 'qwen3-0.6b') {
+    const model = ALL_MODELS[modelName];
+    if (!model) {
+        console.error(`Unknown model: ${modelName}. Available models: ${Object.keys(ALL_MODELS).join(', ')}`);
+        return;
+    }
+    
+    console.log(`Testing Unsloth ${model.name} model URLs...\n`);
     
     const results = {};
     
-    for (const [quant, url] of Object.entries(GGUF_URLS)) {
+    for (const [quant, url] of Object.entries(model.urls)) {
         console.log(`Testing ${quant}...`);
         const result = await testUrl(url);
         results[quant] = result;
@@ -185,22 +211,39 @@ async function downloadFile(url, destination) {
 }
 
 // Download GGUF quantized model
-async function downloadGGUFModel(quantization = 'q4_0') {
-    const ggufUrl = GGUF_URLS[quantization];
-    if (!ggufUrl) {
-        throw new Error(`Invalid quantization: ${quantization}. Available options: ${Object.keys(GGUF_URLS).join(', ')}`);
+async function downloadGGUFModel(modelName = 'qwen3-0.6b', quantization = null) {
+    const model = ALL_MODELS[modelName];
+    if (!model) {
+        throw new Error(`Invalid model: ${modelName}. Available models: ${Object.keys(ALL_MODELS).join(', ')}`);
     }
     
-    const fileName = `qwen3-0.6b.${quantization}.gguf`;
-    const filePath = path.join(MODEL_DIR, fileName);
+    // Use default quantization if none specified
+    if (!quantization) {
+        quantization = model.default_quant;
+    }
+    
+    const ggufUrl = model.urls[quantization];
+    if (!ggufUrl) {
+        throw new Error(`Invalid quantization: ${quantization}. Available options for ${model.name}: ${Object.keys(model.urls).join(', ')}`);
+    }
+    
+    const fileName = `${modelName}.${quantization}.gguf`;
+    const modelDir = path.join(MODELS_DIR, modelName);
+    const filePath = path.join(modelDir, fileName);
     
     try {
-        console.log(`Starting Unsloth Qwen3-0.6B ${quantization.toUpperCase()} GGUF model download...`);
+        console.log(`Starting Unsloth ${model.name} ${quantization.toUpperCase()} GGUF model download...`);
         console.log(`Model URL: ${ggufUrl}`);
         console.log(`Destination: ${filePath}`);
         
         // Ensure directories exist
         ensureDirectories();
+        
+        // Create model-specific directory if it doesn't exist
+        if (!fs.existsSync(modelDir)) {
+            fs.mkdirSync(modelDir, { recursive: true });
+            console.log(`Created model directory: ${modelDir}`);
+        }
         
         // Check if model already exists
         if (fs.existsSync(filePath)) {
@@ -237,15 +280,15 @@ async function downloadGGUFModel(quantization = 'q4_0') {
         console.log('1. Check your internet connection');
         console.log('2. The model URL may have changed - check Hugging Face for the latest link');
         console.log('3. Some models require authentication - you may need to log in to Hugging Face');
-        console.log(`4. Try downloading manually from: https://huggingface.co/unsloth/Qwen3-0.6B-GGUF`);
+        console.log(`4. Try downloading manually from: https://huggingface.co/unsloth/${model.name.replace(' ', '')}-GGUF`);
         throw error;
     }
 }
 
 // Main function
-async function downloadQwen3Model(quantization = 'q4_0') {
+async function downloadQwen3Model(modelName = 'qwen3-0.6b', quantization = null) {
     try {
-        await downloadGGUFModel(quantization);
+        await downloadGGUFModel(modelName, quantization);
     } catch (error) {
         console.error('\nFailed to download model:', error.message);
         process.exit(1);
@@ -254,17 +297,24 @@ async function downloadQwen3Model(quantization = 'q4_0') {
 
 // Show available options
 function showOptions() {
-    console.log('\nAvailable Unsloth Qwen3-0.6B-GGUF model options:');
-    console.log('================================================');
-    console.log('GGUF Quantized Models:');
-    Object.keys(GGUF_URLS).forEach(quant => {
-        console.log(`  - ${quant}: qwen3-0.6b.${quant}.gguf`);
-    });
+    console.log('\nAvailable Unsloth Qwen3 models:');
+    console.log('================================');
+    
+    for (const [modelKey, model] of Object.entries(ALL_MODELS)) {
+        console.log(`\n${model.name} (${modelKey}):`);
+        console.log('GGUF Quantized Models:');
+        Object.keys(model.urls).forEach(quant => {
+            console.log(`  - ${quant}: ${modelKey}.${quant}.gguf`);
+        });
+    }
+    
     console.log('\nUsage:');
-    console.log('  npm run download-qwen3                    # Downloads q4_0 (default)');
-    console.log('  node download-qwen3.js q4_0              # Downloads q4_0');
-    console.log('  node download-qwen3.js q5_1              # Downloads q5_1');
-    console.log('  node download-qwen3.js --test            # Test all URLs');
+    console.log('  npm run download-qwen3                    # Downloads qwen3-0.6b q4_0 (default)');
+    console.log('  node download-qwen3.js                    # Downloads qwen3-0.6b q4_0 (default)');
+    console.log('  node download-qwen3.js qwen3-0.6b q4_0   # Downloads qwen3-0.6b q4_0');
+    console.log('  node download-qwen3.js qwen3-1.7b q8_0   # Downloads qwen3-1.7b q8_0');
+    console.log('  node download-qwen3.js --test            # Test all URLs for qwen3-0.6b');
+    console.log('  node download-qwen3.js --test qwen3-1.7b # Test all URLs for qwen3-1.7b');
     console.log('  node download-qwen3.js --help            # Shows this help');
 }
 
@@ -278,20 +328,26 @@ function parseArgs() {
     }
     
     if (args.includes('--test')) {
-        return 'test';
+        const testIndex = args.indexOf('--test');
+        const modelName = args[testIndex + 1] || 'qwen3-0.6b';
+        return { action: 'test', modelName };
     }
     
-    return args[0] || 'q4_0'; // Default to q4_0
+    // Handle model and quantization arguments
+    const modelName = args[0] || 'qwen3-0.6b';
+    const quantization = args[1] || null; // Will use default quantization if not specified
+    
+    return { action: 'download', modelName, quantization };
 }
 
 // Run the script
 if (require.main === module) {
-    const arg = parseArgs();
+    const args = parseArgs();
     
-    if (arg === 'test') {
-        testAllUrls();
+    if (args.action === 'test') {
+        testAllUrls(args.modelName);
     } else {
-        downloadQwen3Model(arg);
+        downloadQwen3Model(args.modelName, args.quantization);
     }
 }
 

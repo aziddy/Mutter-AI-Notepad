@@ -14,6 +14,7 @@ const {
   clearLLMContext,
   getLLMStatus,
   getAvailableModels,
+  getExternalAPIModels,
   testConnection,
   updateLLMConfiguration
 } = require('./llm');
@@ -33,13 +34,20 @@ function createWindow() {
     show: false
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  // Load from Vite dev server in development or from built files in production
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  if (isDevelopment) {
+    mainWindow.loadURL('http://localhost:5173');
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
 
-  if (process.argv.includes('--dev')) {
+  if (process.argv.includes('--dev') || isDevelopment) {
     mainWindow.webContents.openDevTools();
   }
 }
@@ -187,6 +195,14 @@ ipcMain.handle('get-available-models', async (event) => {
     return await getAvailableModels();
   } catch (error) {
     throw new Error(`Failed to get available models: ${error.message}`);
+  }
+});
+
+ipcMain.handle('get-external-api-models', async (event, apiEndpoint, apiKey) => {
+  try {
+    return await getExternalAPIModels(apiEndpoint, apiKey);
+  } catch (error) {
+    throw new Error(`Failed to get external API models: ${error.message}`);
   }
 });
 

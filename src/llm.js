@@ -63,6 +63,8 @@ class LLMService {
     if (this.isInitialized) {
       this.cleanup();
     }
+    
+    return { success: true, message: 'Configuration updated successfully' };
   }
 
   async getAvailableModels() {
@@ -93,6 +95,30 @@ class LLMService {
         { id: 'qwen3-1.7b-q8_0', name: 'Qwen3 1.7B (Q8_0)', type: 'local' },
         { id: 'qwen3-0.6b-q8_0', name: 'Qwen3 0.6B (Q8_0)', type: 'local' }
       ];
+    }
+  }
+
+  async getExternalAPIModels(apiEndpoint, apiKey) {
+    if (!apiEndpoint || !apiKey) {
+      throw new Error('API endpoint and key are required');
+    }
+
+    try {
+      const client = new OpenAI({
+        baseURL: apiEndpoint,
+        apiKey: apiKey,
+        dangerouslyAllowBrowser: true
+      });
+      
+      const models = await client.models.list();
+      return models.data.map(model => ({
+        id: model.id,
+        name: model.id,
+        type: 'api'
+      }));
+    } catch (error) {
+      console.error('Failed to fetch external API models:', error);
+      throw new Error(`Failed to fetch models: ${error.message}`);
     }
   }
 
@@ -667,12 +693,20 @@ async function getAvailableModels() {
   return await llmService.getAvailableModels();
 }
 
+async function getExternalAPIModels(apiEndpoint, apiKey) {
+  return await llmService.getExternalAPIModels(apiEndpoint, apiKey);
+}
+
 async function testConnection() {
   return await llmService.testConnection();
 }
 
 async function updateLLMConfiguration(config) {
-  return llmService.updateConfiguration(config);
+  try {
+    return llmService.updateConfiguration(config);
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
 }
 
 async function generateSummary(transcription, apiKey) {
@@ -710,6 +744,7 @@ module.exports = {
   getLLMStatus,
   getLLMTokenStats,
   getAvailableModels,
+  getExternalAPIModels,
   testConnection,
   updateLLMConfiguration,
   generateSummary,

@@ -2,17 +2,19 @@
     "name": "mutter-ai-notepad",
     "version": "1.0.0",
     "description": "Local transcription app with AI features",
-    "main": "src/main.js",
+    "main": "dist-electron/main.js",
     "type": "commonjs",
     "scripts": {
         "start": "electron .",
-        "dev": "electron . --dev",
-        "build": "electron-builder",
-        "dist": "npm run build",
-        "test-qwen3-dl-links": "node download-qwen3.js --test",
-        "download-qwen3-0.6b-8Bit": "node download-qwen3.js qwen3-0.6b q8_0",
-        "download-qwen3": "node download-qwen3.js",
-        "download-qwen3-1.7b-8Bit": "node download-qwen3.js qwen3-1.7b q8_0"
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "electron:build": "npm run build && electron-builder",
+        "dist": "npm run electron:build",
+        "test-local-llm": "node scripts/test-local-llm.js",
+        "test-qwen3-dl-links": "node scripts/download-qwen3.js --test",
+        "download-qwen3-0.6b-8Bit": "node scripts/download-qwen3.js qwen3-0.6b q8_0",
+        "download-qwen3": "node scripts/download-qwen3.js",
+        "download-qwen3-1.7b-8Bit": "node scripts/download-qwen3.js qwen3-1.7b q8_0"
     },
     "keywords": [
         "electron",
@@ -29,10 +31,25 @@
         "marked": "^16.0.0",
         "node-llama-cpp": "^3.10.0",
         "nodejs-whisper": "^0.1.19",
-        "openai": "^4.24.0"
+        "openai": "^4.24.0",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
     },
     "devDependencies": {
-        "electron-builder": "^24.9.1"
+        "@types/node": "^20.8.0",
+        "@types/react": "^18.2.0",
+        "@types/react-dom": "^18.2.0",
+        "@typescript-eslint/eslint-plugin": "^6.7.0",
+        "@typescript-eslint/parser": "^6.7.0",
+        "@vitejs/plugin-react": "^4.1.0",
+        "electron-builder": "^24.9.1",
+        "eslint": "^8.50.0",
+        "eslint-plugin-react": "^7.33.0",
+        "eslint-plugin-react-hooks": "^4.6.0",
+        "typescript": "^5.2.0",
+        "vite": "^4.4.0",
+        "vite-plugin-electron": "^0.14.0",
+        "vite-plugin-electron-renderer": "^0.14.0"
     },
     "build": {
         "appId": "com.mutter.ai.notepad",

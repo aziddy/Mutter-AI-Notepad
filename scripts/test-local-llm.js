@@ -1,4 +1,4 @@
-const { generateSummary, askQuestion, generateInsights } = require('./src/llm');
+const { generateSummary, askQuestion, generateInsights } = require('../src/llm');
 
 async function testLocalLLM() {
     console.log('Testing local Qwen3 LLM integration...');

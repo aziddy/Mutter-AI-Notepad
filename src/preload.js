@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // New LLM Configuration APIs
   getAvailableModels: () => ipcRenderer.invoke('get-available-models'),
+  getExternalAPIModels: (apiEndpoint, apiKey) => ipcRenderer.invoke('get-external-api-models', apiEndpoint, apiKey),
   testLLMConnection: () => ipcRenderer.invoke('test-llm-connection'),
   updateLLMConfiguration: (config) => ipcRenderer.invoke('update-llm-configuration', config),
 

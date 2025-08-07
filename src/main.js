@@ -12,7 +12,10 @@ const {
   initializeLLM,
   loadTranscriptionIntoContext,
   clearLLMContext,
-  getLLMStatus 
+  getLLMStatus,
+  getAvailableModels,
+  testConnection,
+  updateLLMConfiguration
 } = require('./llm');
 
 let mainWindow;
@@ -175,6 +178,31 @@ ipcMain.handle('get-llm-status', async (event) => {
     return getLLMStatus();
   } catch (error) {
     throw new Error(`Failed to get LLM status: ${error.message}`);
+  }
+});
+
+// New LLM Configuration handlers
+ipcMain.handle('get-available-models', async (event) => {
+  try {
+    return await getAvailableModels();
+  } catch (error) {
+    throw new Error(`Failed to get available models: ${error.message}`);
+  }
+});
+
+ipcMain.handle('test-llm-connection', async (event) => {
+  try {
+    return await testConnection();
+  } catch (error) {
+    throw new Error(`Failed to test connection: ${error.message}`);
+  }
+});
+
+ipcMain.handle('update-llm-configuration', async (event, config) => {
+  try {
+    return await updateLLMConfiguration(config);
+  } catch (error) {
+    throw new Error(`Failed to update LLM configuration: ${error.message}`);
   }
 });
 

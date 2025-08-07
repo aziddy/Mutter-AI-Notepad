@@ -58,12 +58,44 @@ const elements = {
     aiResultsTitle: document.getElementById('aiResultsTitle'),
     aiResultsContent: document.getElementById('aiResultsContent'),
     
-    // LLM Management elements
-    initializeLLMBtn: document.getElementById('initializeLLMBtn'),
+    // Local AI Section elements
+    initializeLocalBtn: document.getElementById('initializeLocalBtn'),
     loadContextBtn: document.getElementById('loadContextBtn'),
     clearContextBtn: document.getElementById('clearContextBtn'),
-    llmStatus: document.getElementById('llmStatus'),
-    contextStatus: document.getElementById('contextStatus'),
+    localModelStatus: document.getElementById('localModelStatus'),
+    
+    // External API Section elements
+    configureApiBtn: document.getElementById('configureApiBtn'),
+    connectApiBtn: document.getElementById('connectApiBtn'),
+    apiLoadContextBtn: document.getElementById('apiLoadContextBtn'),
+    apiClearContextBtn: document.getElementById('apiClearContextBtn'),
+    apiModelStatus: document.getElementById('apiModelStatus'),
+    apiGenerateSummaryBtn: document.getElementById('apiGenerateSummaryBtn'),
+    apiGenerateInsightsBtn: document.getElementById('apiGenerateInsightsBtn'),
+    apiQuestionInput: document.getElementById('apiQuestionInput'),
+    apiAskQuestionBtn: document.getElementById('apiAskQuestionBtn'),
+    
+    // Settings Modal Elements
+    settingsBtn: document.getElementById('settingsBtn'),
+    settingsModal: document.getElementById('settingsModal'),
+    closeSettings: document.getElementById('closeSettings'),
+    cancelSettings: document.getElementById('cancelSettings'),
+    saveSettings: document.getElementById('saveSettings'),
+    localModelRadio: document.getElementById('localModelRadio'),
+    apiModelRadio: document.getElementById('apiModelRadio'),
+    localModelSettings: document.getElementById('localModelSettings'),
+    apiModelSettings: document.getElementById('apiModelSettings'),
+    localModelSelect: document.getElementById('localModelSelect'),
+    apiEndpoint: document.getElementById('apiEndpoint'),
+    apiKey: document.getElementById('apiKey'),
+    apiModelSelect: document.getElementById('apiModelSelect'),
+    testConnectionBtn: document.getElementById('testConnectionBtn'),
+    refreshModelsBtn: document.getElementById('refreshModelsBtn'),
+    connectionStatus: document.getElementById('connectionStatus'),
+    connectionStatusText: document.getElementById('connectionStatusText'),
+    currentModelType: document.getElementById('currentModelType'),
+    currentModel: document.getElementById('currentModel'),
+    currentStatus: document.getElementById('currentStatus'),
     
     // Actions
     copyBtn: document.getElementById('copyBtn'),
@@ -97,15 +129,43 @@ function setupEventListeners() {
     elements.textTab.addEventListener('click', () => switchTab('text'));
     elements.srtTab.addEventListener('click', () => switchTab('srt'));
     
-    // AI Features
+    // Local AI Features
     elements.generateSummaryBtn.addEventListener('click', () => generateSummary());
     elements.generateInsightsBtn.addEventListener('click', () => generateInsights());
     elements.askQuestionBtn.addEventListener('click', askQuestion);
     
-    // LLM Management
-    elements.initializeLLMBtn.addEventListener('click', initializeLLM);
+    // External API Features
+    elements.apiGenerateSummaryBtn.addEventListener('click', () => generateSummaryWithAPI());
+    elements.apiGenerateInsightsBtn.addEventListener('click', () => generateInsightsWithAPI());
+    elements.apiAskQuestionBtn.addEventListener('click', askQuestionWithAPI);
+    
+    // Local AI Management
+    elements.initializeLocalBtn.addEventListener('click', initializeLocalLLM);
     elements.loadContextBtn.addEventListener('click', loadTranscriptionIntoContext);
     elements.clearContextBtn.addEventListener('click', clearLLMContext);
+    
+    // External API Management
+    elements.configureApiBtn.addEventListener('click', openSettingsModal);
+    elements.connectApiBtn.addEventListener('click', connectAPI);
+    elements.apiLoadContextBtn.addEventListener('click', () => {
+        console.log('API Load Context button clicked');
+        loadTranscriptionIntoContext();
+    });
+    elements.apiClearContextBtn.addEventListener('click', clearLLMContext);
+    
+    // Settings Modal
+    elements.settingsBtn.addEventListener('click', openSettingsModal);
+    elements.closeSettings.addEventListener('click', closeSettingsModal);
+    elements.cancelSettings.addEventListener('click', closeSettingsModal);
+    elements.saveSettings.addEventListener('click', saveSettings);
+    
+    // Settings form interactions
+    elements.localModelRadio.addEventListener('change', onModelTypeChange);
+    elements.apiModelRadio.addEventListener('change', onModelTypeChange);
+    elements.apiEndpoint.addEventListener('input', onApiFieldChange);
+    elements.apiKey.addEventListener('input', onApiFieldChange);
+    elements.testConnectionBtn.addEventListener('click', testConnection);
+    elements.refreshModelsBtn.addEventListener('click', refreshModels);
     
     // Actions
     elements.copyBtn.addEventListener('click', copyTranscription);
@@ -114,10 +174,16 @@ function setupEventListeners() {
     // Toast
     elements.toastClose.addEventListener('click', hideToast);
     
-    // Enter key for question input
+    // Enter key for question inputs
     elements.questionInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !elements.askQuestionBtn.disabled) {
             askQuestion();
+        }
+    });
+    
+    elements.apiQuestionInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !elements.apiAskQuestionBtn.disabled) {
+            askQuestionWithAPI();
         }
     });
     
@@ -508,15 +574,35 @@ async function generateInsights() {
 }
 
 async function askQuestion() {
+    console.log('askQuestion called');
     const question = elements.questionInput.value.trim();
-    if (!currentTranscription || !question) return;
+    console.log('Question from local input:', question);
+    
+    // Check if we should use API input instead
+    const apiQuestion = elements.apiQuestionInput.value.trim();
+    console.log('Question from API input:', apiQuestion);
+    
+    // Use API question if we're in API mode
+    const finalQuestion = apiQuestion || question;
+    console.log('Final question to use:', finalQuestion);
+    
+    if (!currentTranscription || !finalQuestion) {
+        console.log('No transcription or question, returning');
+        return;
+    }
     
     try {
         elements.askQuestionBtn.disabled = true;
         elements.askQuestionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Asking...';
         
+        // Also disable API button if we're using API
+        if (apiQuestion) {
+            elements.apiAskQuestionBtn.disabled = true;
+            elements.apiAskQuestionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Asking...';
+        }
+        
         // Show AI results container immediately with empty content
-        showAIResults(`Q: ${question}`, '');
+        showAIResults(`Q: ${finalQuestion}`, '');
         let streamedContent = '';
         let isStreaming = true;
         
@@ -529,10 +615,11 @@ async function askQuestion() {
         // Check if we should use loaded context or pass transcription
         const useContext = await isContextLoaded();
         const transcriptionToPass = useContext ? null : currentTranscription;
+        console.log('Using context:', useContext, 'Transcription to pass:', transcriptionToPass ? 'yes' : 'no');
         
         const cleanup = window.electronAPI.askQuestionStream(
             transcriptionToPass,
-            question,
+            finalQuestion,
             // onChunk
             (chunk) => {
                 if (!isStreaming) return;
@@ -550,10 +637,18 @@ async function askQuestion() {
                 const cancelButton = elements.aiResults.querySelector('.cancel-stream-btn');
                 if (cancelButton) cancelButton.remove();
                 // Final update with complete result (no indicator)
-                showAIResults(`Q: ${question}`, result);
-                elements.questionInput.value = '';
-                elements.askQuestionBtn.disabled = false;
-                elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+                showAIResults(`Q: ${finalQuestion}`, result);
+                
+                // Clear the appropriate input field
+                if (apiQuestion) {
+                    elements.apiQuestionInput.value = '';
+                    elements.apiAskQuestionBtn.disabled = false;
+                    elements.apiAskQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+                } else {
+                    elements.questionInput.value = '';
+                    elements.askQuestionBtn.disabled = false;
+                    elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+                }
             },
             // onError
             (error) => {
@@ -562,8 +657,15 @@ async function askQuestion() {
                 const cancelButton = elements.aiResults.querySelector('.cancel-stream-btn');
                 if (cancelButton) cancelButton.remove();
                 showToast('Failed to answer question: ' + error, 'error');
-                elements.askQuestionBtn.disabled = false;
-                elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+                
+                // Reset the appropriate button
+                if (apiQuestion) {
+                    elements.apiAskQuestionBtn.disabled = false;
+                    elements.apiAskQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+                } else {
+                    elements.askQuestionBtn.disabled = false;
+                    elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+                }
             }
         );
         
@@ -572,15 +674,30 @@ async function askQuestion() {
             isStreaming = false;
             cleanup();
             cancelBtn.remove();
-            elements.askQuestionBtn.disabled = false;
-            elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+            
+            // Reset the appropriate button
+            if (apiQuestion) {
+                elements.apiAskQuestionBtn.disabled = false;
+                elements.apiAskQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+            } else {
+                elements.askQuestionBtn.disabled = false;
+                elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+            }
             showToast('Question cancelled', 'info');
         });
         
     } catch (error) {
+        console.error('Error in askQuestion:', error);
         showToast('Failed to answer question: ' + error.message, 'error');
-        elements.askQuestionBtn.disabled = false;
-        elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+        
+        // Reset the appropriate button
+        if (apiQuestion) {
+            elements.apiAskQuestionBtn.disabled = false;
+            elements.apiAskQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+        } else {
+            elements.askQuestionBtn.disabled = false;
+            elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+        }
     }
 }
 
@@ -1086,66 +1203,80 @@ function onSrtEntryClick(entry) {
 }
 
 // LLM Management Functions
-async function initializeLLM() {
+async function initializeLocalLLM() {
     try {
-        elements.initializeLLMBtn.disabled = true;
-        elements.initializeLLMBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading Model...';
-        updateLLMStatusIndicator('loading', 'Loading...');
+        elements.initializeLocalBtn.disabled = true;
+        elements.initializeLocalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading Model...';
+        updateLocalModelStatus('loading', 'Loading...');
         
         const result = await window.electronAPI.initializeLLM();
         
         if (result.success) {
             showToast(result.message, 'success');
             updateLLMStatus();
-            elements.initializeLLMBtn.innerHTML = '<i class="fas fa-check"></i> Model Loaded';
-            elements.initializeLLMBtn.disabled = false;
+            elements.initializeLocalBtn.innerHTML = '<i class="fas fa-check"></i> Model Loaded';
+            elements.initializeLocalBtn.disabled = false;
         } else {
             showToast(result.message, 'error');
-            elements.initializeLLMBtn.disabled = false;
-            elements.initializeLLMBtn.innerHTML = '<i class="fas fa-power-off"></i> Load LLM Model';
-            updateLLMStatusIndicator('error', 'Failed');
+            elements.initializeLocalBtn.disabled = false;
+            elements.initializeLocalBtn.innerHTML = '<i class="fas fa-power-off"></i> Load Local Model';
+            updateLocalModelStatus('error', 'Failed');
         }
     } catch (error) {
         showToast('Failed to initialize LLM: ' + error.message, 'error');
-        elements.initializeLLMBtn.disabled = false;
-        elements.initializeLLMBtn.innerHTML = '<i class="fas fa-power-off"></i> Load LLM Model';
-        updateLLMStatusIndicator('error', 'Failed');
+        elements.initializeLocalBtn.disabled = false;
+        elements.initializeLocalBtn.innerHTML = '<i class="fas fa-power-off"></i> Load Local Model';
+        updateLocalModelStatus('error', 'Failed');
     }
 }
 
 async function loadTranscriptionIntoContext() {
+    console.log('loadTranscriptionIntoContext called');
+    console.log('currentTranscription:', currentTranscription ? 'exists' : 'null');
+    
     if (!currentTranscription) {
+        console.log('No transcription available');
         showToast('No transcription available. Please transcribe a file first.', 'error');
         return;
     }
     
     try {
+        console.log('Starting to load transcription into context...');
         elements.loadContextBtn.disabled = true;
         elements.loadContextBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-        updateContextStatusIndicator('loading', 'Loading...');
+        elements.apiLoadContextBtn.disabled = true;
+        elements.apiLoadContextBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
         
+        console.log('Calling window.electronAPI.loadTranscriptionIntoContext...');
         const result = await window.electronAPI.loadTranscriptionIntoContext(currentTranscription);
+        console.log('Result from loadTranscriptionIntoContext:', result);
         
         if (result.success) {
+            console.log('Successfully loaded transcription into context');
             showToast(result.message, 'success');
             updateLLMStatus();
             elements.loadContextBtn.innerHTML = '<i class="fas fa-check"></i> Context Loaded';
             
             // Show a brief acknowledgment from the AI
             if (result.acknowledgment) {
+                console.log('Showing acknowledgment:', result.acknowledgment);
                 showAIResults('LLM Context Loaded', result.acknowledgment);
             }
         } else {
+            console.log('Failed to load transcription into context');
             showToast('Failed to load transcription into context', 'error');
-            updateContextStatusIndicator('error', 'Failed');
         }
     } catch (error) {
+        console.error('Error in loadTranscriptionIntoContext:', error);
         showToast('Failed to load transcription: ' + error.message, 'error');
-        updateContextStatusIndicator('error', 'Failed');
     } finally {
+        console.log('Finally block - resetting button state');
         elements.loadContextBtn.disabled = false;
+        elements.apiLoadContextBtn.disabled = false;
+        
         if (!elements.loadContextBtn.innerHTML.includes('Context Loaded')) {
             elements.loadContextBtn.innerHTML = '<i class="fas fa-upload"></i> Load Transcription into Context';
+            elements.apiLoadContextBtn.innerHTML = '<i class="fas fa-upload"></i> Load Transcription into Context';
         }
     }
 }
@@ -1179,38 +1310,81 @@ async function updateLLMStatus() {
     try {
         const status = await window.electronAPI.getLLMStatus();
         
-        // Update LLM status
-        if (status.isInitialized) {
-            updateLLMStatusIndicator('ready', 'Model Ready');
+        const config = status.config;
+        
+        // Update Local AI Section
+        if (status.isInitialized && config.useLocalModel) {
+            // Local model is active
+            updateLocalModelStatus('ready', 'Model Ready');
             elements.loadContextBtn.disabled = false;
+            elements.initializeLocalBtn.innerHTML = '<i class="fas fa-check"></i> Model Loaded';
+            elements.initializeLocalBtn.disabled = false;
         } else {
-            updateLLMStatusIndicator('', 'Not Loaded');
+            // Local model not active
+            updateLocalModelStatus('', 'Not Loaded');
             elements.loadContextBtn.disabled = true;
+            elements.initializeLocalBtn.innerHTML = '<i class="fas fa-power-off"></i> Load Local Model';
+            elements.initializeLocalBtn.disabled = false;
         }
         
-        // Update context status
-        if (status.hasTranscriptionLoaded) {
-            updateContextStatusIndicator('ready', 'Context Loaded');
-            elements.clearContextBtn.disabled = false;
-            // Update the load context button to show loaded state
-            elements.loadContextBtn.innerHTML = '<i class="fas fa-check"></i> Context Loaded';
+        // Update External API Section
+        if (!config.useLocalModel && config.apiEndpoint && config.apiKey) {
+            // API is configured (even if not initialized yet)
+            if (status.isInitialized) {
+                updateApiModelStatus('ready', 'Connected');
+                elements.configureApiBtn.innerHTML = '<i class="fas fa-check"></i> API Configured';
+                elements.connectApiBtn.disabled = true;
+                elements.connectApiBtn.innerHTML = '<i class="fas fa-check"></i> Connected';
+                elements.apiLoadContextBtn.disabled = false;
+                elements.apiClearContextBtn.disabled = !status.hasTranscriptionLoaded;
+            } else {
+                updateApiModelStatus('', 'Configured (Not Connected)');
+                elements.configureApiBtn.innerHTML = '<i class="fas fa-cog"></i> Configure API';
+                elements.connectApiBtn.disabled = false;
+                elements.connectApiBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                elements.apiLoadContextBtn.disabled = true;
+                elements.apiClearContextBtn.disabled = true;
+            }
         } else {
-            updateContextStatusIndicator('', 'No Context');
+            // API not configured
+            updateApiModelStatus('', 'Not Configured');
+            elements.configureApiBtn.innerHTML = '<i class="fas fa-cog"></i> Configure API';
+            elements.connectApiBtn.disabled = true;
+            elements.connectApiBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            elements.apiLoadContextBtn.disabled = true;
+            elements.apiClearContextBtn.disabled = true;
+        }
+        
+        // Update context status (shared between both sections)
+        if (status.hasTranscriptionLoaded) {
+            elements.clearContextBtn.disabled = false;
+            elements.loadContextBtn.innerHTML = '<i class="fas fa-check"></i> Context Loaded';
+            elements.apiClearContextBtn.disabled = false;
+            elements.apiLoadContextBtn.innerHTML = '<i class="fas fa-check"></i> Context Loaded';
+        } else {
             elements.clearContextBtn.disabled = true;
             elements.loadContextBtn.innerHTML = '<i class="fas fa-upload"></i> Load Transcription into Context';
+            elements.apiClearContextBtn.disabled = true;
+            elements.apiLoadContextBtn.innerHTML = '<i class="fas fa-upload"></i> Load Transcription into Context';
         }
         
-        // Enable/disable AI features based on status
-        const aiActionsEnabled = status.isInitialized;
+        // Enable/disable AI features based on active section
+        const isLocalActive = status.isInitialized && config.useLocalModel;
+        const isApiConfigured = !config.useLocalModel && config.apiEndpoint && config.apiKey;
+        const isApiActive = status.isInitialized && isApiConfigured;
+        const hasContext = status.hasTranscriptionLoaded;
         
-        // Summary and Insights now REQUIRE transcription to be loaded into context first
-        const summaryInsightsEnabled = status.isInitialized && status.hasTranscriptionLoaded;
-        elements.generateSummaryBtn.disabled = !summaryInsightsEnabled;
-        elements.generateInsightsBtn.disabled = !summaryInsightsEnabled;
+        // Local AI features
+        elements.generateSummaryBtn.disabled = !(isLocalActive && hasContext);
+        elements.generateInsightsBtn.disabled = !(isLocalActive && hasContext);
+        elements.askQuestionBtn.disabled = !isLocalActive;
+        elements.questionInput.disabled = !isLocalActive;
         
-        // Questions can be asked anytime the model is loaded (general questions or transcription-specific)
-        elements.askQuestionBtn.disabled = !aiActionsEnabled;
-        elements.questionInput.disabled = !aiActionsEnabled;
+        // API features - enable if API is configured (even if not loaded yet)
+        elements.apiGenerateSummaryBtn.disabled = !(isApiConfigured && hasContext);
+        elements.apiGenerateInsightsBtn.disabled = !(isApiConfigured && hasContext);
+        elements.apiAskQuestionBtn.disabled = !isApiConfigured;
+        elements.apiQuestionInput.disabled = !isApiConfigured;
         
     } catch (error) {
         console.error('Failed to get LLM status:', error);
@@ -1225,11 +1399,19 @@ function updateLLMStatusIndicator(status, text) {
     }
 }
 
-function updateContextStatusIndicator(status, text) {
-    elements.contextStatus.textContent = text;
-    elements.contextStatus.className = 'status-indicator';
+function updateLocalModelStatus(status, text) {
+    elements.localModelStatus.textContent = text;
+    elements.localModelStatus.className = 'status-indicator';
     if (status) {
-        elements.contextStatus.classList.add(status);
+        elements.localModelStatus.classList.add(status);
+    }
+}
+
+function updateApiModelStatus(status, text) {
+    elements.apiModelStatus.textContent = text;
+    elements.apiModelStatus.className = 'status-indicator';
+    if (status) {
+        elements.apiModelStatus.classList.add(status);
     }
 }
 
@@ -1314,4 +1496,265 @@ function showRenameDialog(transcription) {
             closeModal();
         }
     });
+}
+
+// Settings Modal Functions
+async function openSettingsModal() {
+    try {
+        // Load current configuration
+        const status = await window.electronAPI.getLLMStatus();
+        const config = status.config;
+        
+        // Set form values
+        if (config.useLocalModel) {
+            elements.localModelRadio.checked = true;
+            elements.apiModelRadio.checked = false;
+        } else {
+            elements.localModelRadio.checked = false;
+            elements.apiModelRadio.checked = true;
+        }
+        
+        elements.localModelSelect.value = config.selectedModel || 'qwen3-1.7b-q4_0';
+        elements.apiEndpoint.value = config.apiEndpoint || '';
+        elements.apiKey.value = config.apiKey || '';
+        
+        // Update UI based on model type
+        onModelTypeChange();
+        
+        // Update status display
+        updateSettingsStatus(status);
+        
+        // Show modal
+        elements.settingsModal.classList.remove('hidden');
+        
+    } catch (error) {
+        showToast('Failed to load settings: ' + error.message, 'error');
+    }
+}
+
+function closeSettingsModal() {
+    elements.settingsModal.classList.add('hidden');
+    hideConnectionStatus();
+}
+
+function onModelTypeChange() {
+    const useLocal = elements.localModelRadio.checked;
+    
+    if (useLocal) {
+        elements.localModelSettings.classList.remove('hidden');
+        elements.apiModelSettings.classList.add('hidden');
+    } else {
+        elements.localModelSettings.classList.add('hidden');
+        elements.apiModelSettings.classList.remove('hidden');
+        onApiFieldChange();
+    }
+}
+
+function onApiFieldChange() {
+    const hasEndpoint = elements.apiEndpoint.value.trim() !== '';
+    const hasKey = elements.apiKey.value.trim() !== '';
+    
+    elements.testConnectionBtn.disabled = !hasEndpoint || !hasKey;
+    elements.refreshModelsBtn.disabled = !hasEndpoint || !hasKey;
+    elements.apiModelSelect.disabled = !hasEndpoint || !hasKey;
+}
+
+async function testConnection() {
+    const endpoint = elements.apiEndpoint.value.trim();
+    const key = elements.apiKey.value.trim();
+    const model = elements.apiModelSelect.value;
+    
+    if (!endpoint || !key) {
+        showToast('Please enter API endpoint and key', 'error');
+        return;
+    }
+    
+    try {
+        showConnectionStatus('Testing connection...', 'loading');
+        
+        // Temporarily update configuration for testing
+        await window.electronAPI.updateLLMConfiguration({
+            useLocalModel: false,
+            apiEndpoint: endpoint,
+            apiKey: key,
+            selectedModel: model
+        });
+        
+        const result = await window.electronAPI.testLLMConnection();
+        
+        if (result.success) {
+            showConnectionStatus('Connection successful!', 'success');
+            showToast(result.message, 'success');
+        } else {
+            showConnectionStatus('Connection failed', 'error');
+            showToast(result.message, 'error');
+        }
+    } catch (error) {
+        showConnectionStatus('Connection failed', 'error');
+        showToast('Connection test failed: ' + error.message, 'error');
+    }
+}
+
+async function refreshModels() {
+    const endpoint = elements.apiEndpoint.value.trim();
+    const key = elements.apiKey.value.trim();
+    
+    if (!endpoint || !key) {
+        showToast('Please enter API endpoint and key', 'error');
+        return;
+    }
+    
+    try {
+        showConnectionStatus('Loading models...', 'loading');
+        
+        // Temporarily update configuration for fetching models
+        await window.electronAPI.updateLLMConfiguration({
+            useLocalModel: false,
+            apiEndpoint: endpoint,
+            apiKey: key
+        });
+        
+        const models = await window.electronAPI.getAvailableModels();
+        
+        // Populate model select
+        elements.apiModelSelect.innerHTML = '';
+        if (models.length > 0) {
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                elements.apiModelSelect.appendChild(option);
+            });
+            
+            showConnectionStatus(`Found ${models.length} models`, 'success');
+            showToast(`Loaded ${models.length} available models`, 'success');
+        } else {
+            elements.apiModelSelect.innerHTML = '<option value="">No models found</option>';
+            showConnectionStatus('No models found', 'error');
+            showToast('No models found on this API endpoint', 'error');
+        }
+    } catch (error) {
+        showConnectionStatus('Failed to load models', 'error');
+        showToast('Failed to load models: ' + error.message, 'error');
+    }
+}
+
+async function saveSettings() {
+    try {
+        const useLocal = elements.localModelRadio.checked;
+        const config = {
+            useLocalModel: useLocal
+        };
+        
+        if (useLocal) {
+            config.selectedModel = elements.localModelSelect.value;
+        } else {
+            config.apiEndpoint = elements.apiEndpoint.value.trim();
+            config.apiKey = elements.apiKey.value.trim();
+            config.selectedModel = elements.apiModelSelect.value;
+            
+            if (!config.apiEndpoint || !config.apiKey) {
+                showToast('Please enter API endpoint and key', 'error');
+                return;
+            }
+        }
+        
+        await window.electronAPI.updateLLMConfiguration(config);
+        
+        // Update status display
+        const status = await window.electronAPI.getLLMStatus();
+        updateSettingsStatus(status);
+        
+        // Update main UI status
+        updateLLMStatus();
+        
+        closeSettingsModal();
+        showToast('Settings saved successfully', 'success');
+        
+    } catch (error) {
+        showToast('Failed to save settings: ' + error.message, 'error');
+    }
+}
+
+function updateSettingsStatus(status) {
+    const config = status.config;
+    
+    elements.currentModelType.textContent = config.useLocalModel ? 'Local' : 'API';
+    elements.currentModel.textContent = config.selectedModel || 'Not selected';
+    
+    if (status.isInitialized) {
+        elements.currentStatus.textContent = 'Ready';
+        elements.currentStatus.style.color = '#10B981';
+    } else {
+        elements.currentStatus.textContent = 'Not Loaded';
+        elements.currentStatus.style.color = '#6B7280';
+    }
+    
+    // Update the main UI status
+    updateLLMStatus();
+}
+
+function showConnectionStatus(message, type) {
+    elements.connectionStatusText.textContent = message;
+    elements.connectionStatus.className = `connection-status ${type}`;
+    elements.connectionStatus.classList.remove('hidden');
+}
+
+function hideConnectionStatus() {
+    elements.connectionStatus.classList.add('hidden');
+}
+
+// API-specific functions that handle initialization
+async function generateSummaryWithAPI() {
+    await ensureAPIInitialized();
+    generateSummary();
+}
+
+async function generateInsightsWithAPI() {
+    await ensureAPIInitialized();
+    generateInsights();
+}
+
+async function askQuestionWithAPI() {
+    console.log('askQuestionWithAPI called');
+    try {
+        await ensureAPIInitialized();
+        console.log('API initialized, calling askQuestion');
+        askQuestion();
+    } catch (error) {
+        console.error('Error in askQuestionWithAPI:', error);
+    }
+}
+
+async function connectAPI() {
+    try {
+        elements.connectApiBtn.disabled = true;
+        elements.connectApiBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+        updateApiModelStatus('loading', 'Connecting...');
+        
+        await window.electronAPI.initializeLLM();
+        updateLLMStatus();
+        
+        showToast('API connected successfully', 'success');
+    } catch (error) {
+        showToast('Failed to connect API: ' + error.message, 'error');
+        elements.connectApiBtn.disabled = false;
+        elements.connectApiBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+        updateApiModelStatus('error', 'Connection Failed');
+    }
+}
+
+async function ensureAPIInitialized() {
+    const status = await window.electronAPI.getLLMStatus();
+    if (!status.isInitialized) {
+        try {
+            showToast('Initializing API connection...', 'info');
+            await window.electronAPI.initializeLLM();
+            updateLLMStatus();
+            showToast('API initialized successfully', 'success');
+        } catch (error) {
+            showToast('Failed to initialize API: ' + error.message, 'error');
+            throw error;
+        }
+    }
 }

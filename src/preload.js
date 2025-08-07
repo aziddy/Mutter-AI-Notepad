@@ -15,6 +15,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearLLMContext: () => ipcRenderer.invoke('clear-llm-context'),
   getLLMStatus: () => ipcRenderer.invoke('get-llm-status'),
 
+  // New LLM Configuration APIs
+  getAvailableModels: () => ipcRenderer.invoke('get-available-models'),
+  testLLMConnection: () => ipcRenderer.invoke('test-llm-connection'),
+  updateLLMConfiguration: (config) => ipcRenderer.invoke('update-llm-configuration', config),
+
   // Streaming APIs
   generateSummaryStream: (transcription, onChunk, onComplete, onError) => {
     const streamId = Math.random().toString(36).substring(7);

@@ -612,6 +612,129 @@ body {
     gap: 8px;
 }
 
+/* AI Sections */
+.ai-section {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #F3F4F6;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.section-header h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.section-header h4 i {
+    color: #4F46E5;
+}
+
+.section-status {
+    display: flex;
+    gap: 8px;
+}
+
+.section-content {
+    padding: 20px;
+}
+
+/* Local AI Section */
+.local-ai-section {
+    border-left: 4px solid #10B981;
+}
+
+.local-ai-section .section-header {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+/* External API Section */
+.external-ai-section {
+    border-left: 4px solid #3B82F6;
+}
+
+.external-ai-section .section-header {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+/* Model Management */
+.model-management {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.model-management .btn {
+    flex: 1;
+    min-width: 0;
+}
+
+/* API Config */
+.api-config {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 6px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.api-info p {
+    font-size: 0.9rem;
+    color: #6B7280;
+    margin: 0;
+    text-align: center;
+}
+
+.api-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.api-buttons .btn {
+    flex: 1;
+}
+
+/* API Context Management */
+.api-context-management {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.api-context-management .btn {
+    flex: 1;
+    min-width: 0;
+}
+
+/* API Actions */
+.api-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.api-question-section {
+    margin-bottom: 20px;
+}
+
 .llm-status {
     display: flex;
     gap: 10px;
@@ -640,16 +763,32 @@ body {
     background: #DC3545;
 }
 
-.llm-management {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    padding: 15px;
-    background: rgba(99, 102, 241, 0.05);
-    border-radius: 6px;
-    border: 1px solid rgba(99, 102, 241, 0.2);
+/* Mode indicator styles */
+.mode-indicator {
+    font-weight: 600;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
+
+.mode-indicator.local {
+    background-color: #10B981;
+    color: white;
+}
+
+.mode-indicator.api {
+    background-color: #3B82F6;
+    color: white;
+}
+
+.mode-indicator:not(.local):not(.api) {
+    background-color: #6B7280;
+    color: white;
+}
+
+
 
 .api-key-input {
     display: flex;
@@ -1114,9 +1253,240 @@ body {
 }
 
 .modal-footer {
-    padding: 16px 24px 24px;
     display: flex;
     justify-content: flex-end;
-    gap: 12px;
+    gap: 10px;
+    padding: 20px;
     border-top: 1px solid #E5E7EB;
+}
+
+/* Settings Modal Styles */
+.settings-modal {
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.settings-section {
+    margin-bottom: 30px;
+}
+
+.settings-section h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.setting-group {
+    margin-bottom: 20px;
+}
+
+.setting-label {
+    display: block;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.setting-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+}
+
+.setting-input:focus {
+    outline: none;
+    border-color: #4F46E5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.setting-input:disabled {
+    background-color: #F9FAFB;
+    color: #9CA3AF;
+    cursor: not-allowed;
+}
+
+.setting-help {
+    display: block;
+    font-size: 12px;
+    color: #6B7280;
+    margin-top: 4px;
+}
+
+/* Radio Button Styles */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 12px;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.radio-option:hover {
+    border-color: #4F46E5;
+    background-color: #F8FAFC;
+}
+
+.radio-option input[type="radio"] {
+    display: none;
+}
+
+.radio-custom {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #D1D5DB;
+    border-radius: 50%;
+    margin-right: 12px;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.radio-option input[type="radio"]:checked + .radio-custom {
+    border-color: #4F46E5;
+    background-color: #4F46E5;
+}
+
+.radio-option input[type="radio"]:checked + .radio-custom::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background-color: white;
+    border-radius: 50%;
+}
+
+.radio-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.radio-text i {
+    color: #4F46E5;
+    width: 16px;
+}
+
+/* Setting Rows and Fields */
+.setting-row {
+    margin-bottom: 15px;
+}
+
+.setting-field {
+    width: 100%;
+}
+
+.setting-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.setting-actions .btn {
+    flex: 1;
+}
+
+/* Connection Status */
+.connection-status {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 6px;
+    background-color: #F9FAFB;
+    border: 1px solid #E5E7EB;
+}
+
+.connection-status .status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.connection-status .status-indicator i {
+    font-size: 8px;
+    color: #6B7280;
+}
+
+.connection-status.success .status-indicator i {
+    color: #10B981;
+}
+
+.connection-status.error .status-indicator i {
+    color: #EF4444;
+}
+
+.connection-status.loading .status-indicator i {
+    color: #F59E0B;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Status Grid */
+.status-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: #F9FAFB;
+    border-radius: 6px;
+    border: 1px solid #E5E7EB;
+}
+
+.status-label {
+    font-weight: 500;
+    color: #374151;
+}
+
+.status-value {
+    color: #6B7280;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 13px;
+}
+
+/* Responsive adjustments for settings modal */
+@media (max-width: 768px) {
+    .settings-modal {
+        width: 95%;
+        margin: 20px;
+    }
+    
+    .setting-actions {
+        flex-direction: column;
+    }
+    
+    .radio-group {
+        gap: 8px;
+    }
+    
+    .radio-option {
+        padding: 10px;
+    }
 } 

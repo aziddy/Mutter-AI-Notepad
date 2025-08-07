@@ -1,7 +1,7 @@
 // Application State
 let currentTranscription = '';
 let currentJsonData = null;
-let currentApiKey = localStorage.getItem('openai_api_key') || '';
+// API key no longer needed with local model
 
 // Audio Player State
 let currentAudioFile = null;
@@ -16,6 +16,7 @@ const elements = {
     transcribeBtn: document.getElementById('transcribeBtn'),
     fileInfo: document.getElementById('fileInfo'),
     fileName: document.getElementById('fileName'),
+    transcriptionNameInput: document.getElementById('transcriptionNameInput'),
     progressSection: document.getElementById('progressSection'),
     progressText: document.getElementById('progressText'),
     resultsSection: document.getElementById('resultsSection'),
@@ -48,8 +49,7 @@ const elements = {
     volumeSlider: document.getElementById('volumeSlider'),
     
     // AI Features
-    apiKeyInput: document.getElementById('apiKeyInput'),
-    saveApiKeyBtn: document.getElementById('saveApiKeyBtn'),
+    // API key elements removed - no longer needed
     generateSummaryBtn: document.getElementById('generateSummaryBtn'),
     generateInsightsBtn: document.getElementById('generateInsightsBtn'),
     questionInput: document.getElementById('questionInput'),
@@ -57,6 +57,13 @@ const elements = {
     aiResults: document.getElementById('aiResults'),
     aiResultsTitle: document.getElementById('aiResultsTitle'),
     aiResultsContent: document.getElementById('aiResultsContent'),
+    
+    // LLM Management elements
+    initializeLLMBtn: document.getElementById('initializeLLMBtn'),
+    loadContextBtn: document.getElementById('loadContextBtn'),
+    clearContextBtn: document.getElementById('clearContextBtn'),
+    llmStatus: document.getElementById('llmStatus'),
+    contextStatus: document.getElementById('contextStatus'),
     
     // Actions
     copyBtn: document.getElementById('copyBtn'),
@@ -73,15 +80,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
     setupEventListeners();
     loadTranscriptions();
+    updateLLMStatus();
 });
 
 function initializeApp() {
-    // Set API key if available
-    if (currentApiKey) {
-        elements.apiKeyInput.value = currentApiKey;
-        enableAIFeatures();
-    }
-    
+    // AI features are now always available with local model
     showWelcomeScreen();
 }
 
@@ -95,10 +98,14 @@ function setupEventListeners() {
     elements.srtTab.addEventListener('click', () => switchTab('srt'));
     
     // AI Features
-    elements.saveApiKeyBtn.addEventListener('click', saveApiKey);
     elements.generateSummaryBtn.addEventListener('click', () => generateSummary());
     elements.generateInsightsBtn.addEventListener('click', () => generateInsights());
     elements.askQuestionBtn.addEventListener('click', askQuestion);
+    
+    // LLM Management
+    elements.initializeLLMBtn.addEventListener('click', initializeLLM);
+    elements.loadContextBtn.addEventListener('click', loadTranscriptionIntoContext);
+    elements.clearContextBtn.addEventListener('click', clearLLMContext);
     
     // Actions
     elements.copyBtn.addEventListener('click', copyTranscription);
@@ -114,10 +121,7 @@ function setupEventListeners() {
         }
     });
     
-    // API key input
-    elements.apiKeyInput.addEventListener('input', () => {
-        elements.saveApiKeyBtn.disabled = !elements.apiKeyInput.value.trim();
-    });
+    // API key input removed - no longer needed
     
     // Keyboard shortcuts for audio player
     document.addEventListener('keydown', (e) => {
@@ -173,7 +177,9 @@ function showFileInfo(filePath) {
     hideWelcomeScreen();
     
     const fileName = filePath.split(/[\\/]/).pop();
+    const baseName = fileName.substring(0, fileName.lastIndexOf('.'));
     elements.fileName.textContent = fileName;
+    elements.transcriptionNameInput.value = baseName; // Set default name
     elements.fileInfo.classList.remove('hidden');
     elements.transcribeBtn.disabled = false;
     elements.transcribeBtn.setAttribute('data-file-path', filePath);
@@ -187,12 +193,15 @@ async function startTranscription() {
         showProgress('Initializing transcription...');
         elements.transcribeBtn.disabled = true;
         
+        // Get custom name from input
+        const customName = elements.transcriptionNameInput.value.trim();
+        
         // Update progress text
         setTimeout(() => updateProgress('Converting audio format...'), 1000);
         setTimeout(() => updateProgress('Loading Whisper model...'), 3000);
         setTimeout(() => updateProgress('Transcribing audio...'), 5000);
         
-        const result = await window.electronAPI.transcribeFile(filePath);
+        const result = await window.electronAPI.transcribeFile(filePath, customName);
         
         currentTranscription = result.transcription;
         currentJsonData = result.jsonData;
@@ -237,6 +246,15 @@ function showTranscriptionResults(result) {
         elements.transcriptionMetadata.classList.add('hidden');
     }
     
+    // Update results header with custom name if available
+    const customName = result.jsonData?.metadata?.customName;
+    if (customName) {
+        const resultsHeader = document.querySelector('.results-header h2');
+        if (resultsHeader) {
+            resultsHeader.textContent = `Transcription: ${customName}`;
+        }
+    }
+    
     // Display transcription text
     elements.transcriptionText.textContent = result.transcription;
     
@@ -260,10 +278,8 @@ function showTranscriptionResults(result) {
     elements.resultsSection.classList.remove('hidden');
     elements.transcribeBtn.disabled = false;
     
-    // Enable AI features if API key is available
-    if (currentApiKey) {
-        enableAIFeatures();
-    }
+    // Always enable AI features since we're using local model
+    enableAIFeatures();
     
     showToast(`Transcription completed! Saved as ${result.fileName}`, 'success');
 }
@@ -330,15 +346,7 @@ function switchTab(tabName) {
     }
 }
 
-function saveApiKey() {
-    const apiKey = elements.apiKeyInput.value.trim();
-    if (apiKey) {
-        currentApiKey = apiKey;
-        localStorage.setItem('openai_api_key', apiKey);
-        enableAIFeatures();
-        showToast('API key saved successfully!', 'success');
-    }
-}
+// saveApiKey function removed - no longer needed with local model
 
 function enableAIFeatures() {
     elements.generateSummaryBtn.disabled = !currentTranscription;
@@ -352,38 +360,148 @@ function enableAIFeatures() {
 }
 
 async function generateSummary() {
-    if (!currentTranscription || !currentApiKey) return;
+    if (!currentTranscription) return;
     
     try {
         elements.generateSummaryBtn.disabled = true;
         elements.generateSummaryBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
         
-        const summary = await window.electronAPI.generateSummary(currentTranscription, currentApiKey);
+        // Show AI results container immediately with empty content
+        showAIResults('Summary', '');
+        let streamedContent = '';
+        let isStreaming = true;
         
-        showAIResults('Summary', summary);
+        // Add cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'cancel-stream-btn';
+        cancelBtn.innerHTML = '<i class="fas fa-times"></i> Cancel';
+        elements.aiResults.appendChild(cancelBtn);
+        
+        // Check if we should use loaded context or pass transcription
+        const useContext = await isContextLoaded();
+        const transcriptionToPass = useContext ? null : currentTranscription;
+        
+        const cleanup = window.electronAPI.generateSummaryStream(
+            transcriptionToPass,
+            // onChunk
+            (chunk) => {
+                if (!isStreaming) return;
+                streamedContent += chunk;
+                // Update the content in real-time with streaming indicator
+                const contentWithIndicator = streamedContent + '<span class="streaming-indicator">▋</span>';
+                elements.aiResultsContent.innerHTML = window.marked.parse(contentWithIndicator || '');
+                // Auto-scroll to bottom as content grows
+                elements.aiResults.scrollTop = elements.aiResults.scrollHeight;
+            },
+            // onComplete
+            (result) => {
+                isStreaming = false;
+                // Remove cancel button
+                const cancelButton = elements.aiResults.querySelector('.cancel-stream-btn');
+                if (cancelButton) cancelButton.remove();
+                // Final update with complete result (no indicator)
+                showAIResults('Summary', result);
+                elements.generateSummaryBtn.disabled = false;
+                elements.generateSummaryBtn.innerHTML = '<i class="fas fa-list"></i> Generate Summary';
+            },
+            // onError
+            (error) => {
+                isStreaming = false;
+                // Remove cancel button
+                const cancelButton = elements.aiResults.querySelector('.cancel-stream-btn');
+                if (cancelButton) cancelButton.remove();
+                showToast('Failed to generate summary: ' + error, 'error');
+                elements.generateSummaryBtn.disabled = false;
+                elements.generateSummaryBtn.innerHTML = '<i class="fas fa-list"></i> Generate Summary';
+            }
+        );
+        
+        // Cancel button functionality
+        cancelBtn.addEventListener('click', () => {
+            isStreaming = false;
+            cleanup();
+            cancelBtn.remove();
+            elements.generateSummaryBtn.disabled = false;
+            elements.generateSummaryBtn.innerHTML = '<i class="fas fa-list"></i> Generate Summary';
+            showToast('Summary generation cancelled', 'info');
+        });
         
     } catch (error) {
         showToast('Failed to generate summary: ' + error.message, 'error');
-    } finally {
         elements.generateSummaryBtn.disabled = false;
         elements.generateSummaryBtn.innerHTML = '<i class="fas fa-list"></i> Generate Summary';
     }
 }
 
 async function generateInsights() {
-    if (!currentTranscription || !currentApiKey) return;
+    if (!currentTranscription) return;
     
     try {
         elements.generateInsightsBtn.disabled = true;
         elements.generateInsightsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
         
-        const insights = await window.electronAPI.generateInsights(currentTranscription, currentApiKey);
+        // Show AI results container immediately with empty content
+        showAIResults('Insights & Analysis', '');
+        let streamedContent = '';
+        let isStreaming = true;
         
-        showAIResults('Insights & Analysis', insights);
+        // Add cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'cancel-stream-btn';
+        cancelBtn.innerHTML = '<i class="fas fa-times"></i> Cancel';
+        elements.aiResults.appendChild(cancelBtn);
+        
+        // Check if we should use loaded context or pass transcription
+        const useContext = await isContextLoaded();
+        const transcriptionToPass = useContext ? null : currentTranscription;
+        
+        const cleanup = window.electronAPI.generateInsightsStream(
+            transcriptionToPass,
+            // onChunk
+            (chunk) => {
+                if (!isStreaming) return;
+                streamedContent += chunk;
+                // Update the content in real-time with streaming indicator
+                const contentWithIndicator = streamedContent + '<span class="streaming-indicator">▋</span>';
+                elements.aiResultsContent.innerHTML = window.marked.parse(contentWithIndicator || '');
+                // Auto-scroll to bottom as content grows
+                elements.aiResults.scrollTop = elements.aiResults.scrollHeight;
+            },
+            // onComplete
+            (result) => {
+                isStreaming = false;
+                // Remove cancel button
+                const cancelButton = elements.aiResults.querySelector('.cancel-stream-btn');
+                if (cancelButton) cancelButton.remove();
+                // Final update with complete result (no indicator)
+                showAIResults('Insights & Analysis', result);
+                elements.generateInsightsBtn.disabled = false;
+                elements.generateInsightsBtn.innerHTML = '<i class="fas fa-lightbulb"></i> Generate Insights';
+            },
+            // onError
+            (error) => {
+                isStreaming = false;
+                // Remove cancel button
+                const cancelButton = elements.aiResults.querySelector('.cancel-stream-btn');
+                if (cancelButton) cancelButton.remove();
+                showToast('Failed to generate insights: ' + error, 'error');
+                elements.generateInsightsBtn.disabled = false;
+                elements.generateInsightsBtn.innerHTML = '<i class="fas fa-lightbulb"></i> Generate Insights';
+            }
+        );
+        
+        // Cancel button functionality
+        cancelBtn.addEventListener('click', () => {
+            isStreaming = false;
+            cleanup();
+            cancelBtn.remove();
+            elements.generateInsightsBtn.disabled = false;
+            elements.generateInsightsBtn.innerHTML = '<i class="fas fa-lightbulb"></i> Generate Insights';
+            showToast('Insights generation cancelled', 'info');
+        });
         
     } catch (error) {
         showToast('Failed to generate insights: ' + error.message, 'error');
-    } finally {
         elements.generateInsightsBtn.disabled = false;
         elements.generateInsightsBtn.innerHTML = '<i class="fas fa-lightbulb"></i> Generate Insights';
     }
@@ -391,20 +509,76 @@ async function generateInsights() {
 
 async function askQuestion() {
     const question = elements.questionInput.value.trim();
-    if (!currentTranscription || !currentApiKey || !question) return;
+    if (!currentTranscription || !question) return;
     
     try {
         elements.askQuestionBtn.disabled = true;
         elements.askQuestionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Asking...';
         
-        const answer = await window.electronAPI.askQuestion(currentTranscription, question, currentApiKey);
+        // Show AI results container immediately with empty content
+        showAIResults(`Q: ${question}`, '');
+        let streamedContent = '';
+        let isStreaming = true;
         
-        showAIResults(`Q: ${question}`, answer);
-        elements.questionInput.value = '';
+        // Add cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'cancel-stream-btn';
+        cancelBtn.innerHTML = '<i class="fas fa-times"></i> Cancel';
+        elements.aiResults.appendChild(cancelBtn);
+        
+        // Check if we should use loaded context or pass transcription
+        const useContext = await isContextLoaded();
+        const transcriptionToPass = useContext ? null : currentTranscription;
+        
+        const cleanup = window.electronAPI.askQuestionStream(
+            transcriptionToPass,
+            question,
+            // onChunk
+            (chunk) => {
+                if (!isStreaming) return;
+                streamedContent += chunk;
+                // Update the content in real-time with streaming indicator
+                const contentWithIndicator = streamedContent + '<span class="streaming-indicator">▋</span>';
+                elements.aiResultsContent.innerHTML = window.marked.parse(contentWithIndicator || '');
+                // Auto-scroll to bottom as content grows
+                elements.aiResults.scrollTop = elements.aiResults.scrollHeight;
+            },
+            // onComplete
+            (result) => {
+                isStreaming = false;
+                // Remove cancel button
+                const cancelButton = elements.aiResults.querySelector('.cancel-stream-btn');
+                if (cancelButton) cancelButton.remove();
+                // Final update with complete result (no indicator)
+                showAIResults(`Q: ${question}`, result);
+                elements.questionInput.value = '';
+                elements.askQuestionBtn.disabled = false;
+                elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+            },
+            // onError
+            (error) => {
+                isStreaming = false;
+                // Remove cancel button
+                const cancelButton = elements.aiResults.querySelector('.cancel-stream-btn');
+                if (cancelButton) cancelButton.remove();
+                showToast('Failed to answer question: ' + error, 'error');
+                elements.askQuestionBtn.disabled = false;
+                elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+            }
+        );
+        
+        // Cancel button functionality
+        cancelBtn.addEventListener('click', () => {
+            isStreaming = false;
+            cleanup();
+            cancelBtn.remove();
+            elements.askQuestionBtn.disabled = false;
+            elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
+            showToast('Question cancelled', 'info');
+        });
         
     } catch (error) {
         showToast('Failed to answer question: ' + error.message, 'error');
-    } finally {
         elements.askQuestionBtn.disabled = false;
         elements.askQuestionBtn.innerHTML = '<i class="fas fa-question"></i> Ask';
     }
@@ -412,7 +586,7 @@ async function askQuestion() {
 
 function showAIResults(title, content) {
     elements.aiResultsTitle.textContent = title;
-    elements.aiResultsContent.textContent = content;
+    elements.aiResultsContent.innerHTML = window.marked.parse(content || '');
     elements.aiResults.classList.remove('hidden');
     
     // Scroll to results
@@ -452,9 +626,17 @@ function displayTranscriptions(transcriptions) {
         const audioIndicator = transcription.jsonData?.metadata?.audioSourceFile ? 
             '<span class="audio-indicator" title="Has audio source file"><i class="fas fa-music"></i></span>' : '';
         
+        // Display custom name if available, otherwise show folder name
+        const displayName = transcription.customName || transcription.fileName;
+        
         item.innerHTML = `
             <div class="transcription-item-header">
-                <h4>${transcription.fileName}</h4>
+                <div class="transcription-name-section">
+                    <h4 class="transcription-name" title="${displayName}">${displayName}</h4>
+                    <button class="rename-btn" title="Rename transcription">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </div>
                 <div class="indicators">
                     ${jsonIndicator}
                     ${srtIndicator}
@@ -470,8 +652,19 @@ function displayTranscriptions(transcriptions) {
             </div>
         `;
         
-        item.addEventListener('click', () => {
-            loadTranscription(transcription);
+        // Add click handler for the main item
+        item.addEventListener('click', (e) => {
+            // Don't trigger if clicking on rename button
+            if (!e.target.closest('.rename-btn')) {
+                loadTranscription(transcription);
+            }
+        });
+        
+        // Add click handler for rename button
+        const renameBtn = item.querySelector('.rename-btn');
+        renameBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showRenameDialog(transcription);
         });
         
         elements.transcriptionsList.appendChild(item);
@@ -492,6 +685,20 @@ function loadTranscription(transcription) {
         displayMetadata(transcription.jsonData);
     } else {
         elements.transcriptionMetadata.classList.add('hidden');
+    }
+    
+    // Update results header with custom name if available
+    const customName = transcription.customName;
+    if (customName) {
+        const resultsHeader = document.querySelector('.results-header h2');
+        if (resultsHeader) {
+            resultsHeader.textContent = `Transcription: ${customName}`;
+        }
+    } else {
+        const resultsHeader = document.querySelector('.results-header h2');
+        if (resultsHeader) {
+            resultsHeader.textContent = 'Transcription Results';
+        }
     }
     
     // Display transcription text
@@ -517,9 +724,8 @@ function loadTranscription(transcription) {
     elements.resultsSection.classList.remove('hidden');
     elements.fileInfo.classList.add('hidden');
     
-    if (currentApiKey) {
-        enableAIFeatures();
-    }
+    // Always enable AI features since we're using local model
+    enableAIFeatures();
     
     showToast('Transcription loaded', 'success');
 }
@@ -877,4 +1083,235 @@ function onSrtEntryClick(entry) {
     // Highlight the clicked entry
     clearPlayingEntry();
     highlightPlayingEntry(entry);
-} 
+}
+
+// LLM Management Functions
+async function initializeLLM() {
+    try {
+        elements.initializeLLMBtn.disabled = true;
+        elements.initializeLLMBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading Model...';
+        updateLLMStatusIndicator('loading', 'Loading...');
+        
+        const result = await window.electronAPI.initializeLLM();
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+            updateLLMStatus();
+            elements.initializeLLMBtn.innerHTML = '<i class="fas fa-check"></i> Model Loaded';
+            elements.initializeLLMBtn.disabled = false;
+        } else {
+            showToast(result.message, 'error');
+            elements.initializeLLMBtn.disabled = false;
+            elements.initializeLLMBtn.innerHTML = '<i class="fas fa-power-off"></i> Load LLM Model';
+            updateLLMStatusIndicator('error', 'Failed');
+        }
+    } catch (error) {
+        showToast('Failed to initialize LLM: ' + error.message, 'error');
+        elements.initializeLLMBtn.disabled = false;
+        elements.initializeLLMBtn.innerHTML = '<i class="fas fa-power-off"></i> Load LLM Model';
+        updateLLMStatusIndicator('error', 'Failed');
+    }
+}
+
+async function loadTranscriptionIntoContext() {
+    if (!currentTranscription) {
+        showToast('No transcription available. Please transcribe a file first.', 'error');
+        return;
+    }
+    
+    try {
+        elements.loadContextBtn.disabled = true;
+        elements.loadContextBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        updateContextStatusIndicator('loading', 'Loading...');
+        
+        const result = await window.electronAPI.loadTranscriptionIntoContext(currentTranscription);
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+            updateLLMStatus();
+            elements.loadContextBtn.innerHTML = '<i class="fas fa-check"></i> Context Loaded';
+            
+            // Show a brief acknowledgment from the AI
+            if (result.acknowledgment) {
+                showAIResults('LLM Context Loaded', result.acknowledgment);
+            }
+        } else {
+            showToast('Failed to load transcription into context', 'error');
+            updateContextStatusIndicator('error', 'Failed');
+        }
+    } catch (error) {
+        showToast('Failed to load transcription: ' + error.message, 'error');
+        updateContextStatusIndicator('error', 'Failed');
+    } finally {
+        elements.loadContextBtn.disabled = false;
+        if (!elements.loadContextBtn.innerHTML.includes('Context Loaded')) {
+            elements.loadContextBtn.innerHTML = '<i class="fas fa-upload"></i> Load Transcription into Context';
+        }
+    }
+}
+
+async function clearLLMContext() {
+    try {
+        elements.clearContextBtn.disabled = true;
+        elements.clearContextBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Clearing...';
+        
+        const result = await window.electronAPI.clearLLMContext();
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+            updateLLMStatus();
+            elements.loadContextBtn.innerHTML = '<i class="fas fa-upload"></i> Load Transcription into Context';
+            
+            // Hide AI results when context is cleared
+            elements.aiResults.classList.add('hidden');
+        } else {
+            showToast('Failed to clear context', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to clear context: ' + error.message, 'error');
+    } finally {
+        elements.clearContextBtn.disabled = false;
+        elements.clearContextBtn.innerHTML = '<i class="fas fa-trash"></i> Clear Context';
+    }
+}
+
+async function updateLLMStatus() {
+    try {
+        const status = await window.electronAPI.getLLMStatus();
+        
+        // Update LLM status
+        if (status.isInitialized) {
+            updateLLMStatusIndicator('ready', 'Model Ready');
+            elements.loadContextBtn.disabled = false;
+        } else {
+            updateLLMStatusIndicator('', 'Not Loaded');
+            elements.loadContextBtn.disabled = true;
+        }
+        
+        // Update context status
+        if (status.hasTranscriptionLoaded) {
+            updateContextStatusIndicator('ready', 'Context Loaded');
+            elements.clearContextBtn.disabled = false;
+            // Update the load context button to show loaded state
+            elements.loadContextBtn.innerHTML = '<i class="fas fa-check"></i> Context Loaded';
+        } else {
+            updateContextStatusIndicator('', 'No Context');
+            elements.clearContextBtn.disabled = true;
+            elements.loadContextBtn.innerHTML = '<i class="fas fa-upload"></i> Load Transcription into Context';
+        }
+        
+        // Enable/disable AI features based on status
+        const aiActionsEnabled = status.isInitialized;
+        
+        // Summary and Insights now REQUIRE transcription to be loaded into context first
+        const summaryInsightsEnabled = status.isInitialized && status.hasTranscriptionLoaded;
+        elements.generateSummaryBtn.disabled = !summaryInsightsEnabled;
+        elements.generateInsightsBtn.disabled = !summaryInsightsEnabled;
+        
+        // Questions can be asked anytime the model is loaded (general questions or transcription-specific)
+        elements.askQuestionBtn.disabled = !aiActionsEnabled;
+        elements.questionInput.disabled = !aiActionsEnabled;
+        
+    } catch (error) {
+        console.error('Failed to get LLM status:', error);
+    }
+}
+
+function updateLLMStatusIndicator(status, text) {
+    elements.llmStatus.textContent = text;
+    elements.llmStatus.className = 'status-indicator';
+    if (status) {
+        elements.llmStatus.classList.add(status);
+    }
+}
+
+function updateContextStatusIndicator(status, text) {
+    elements.contextStatus.textContent = text;
+    elements.contextStatus.className = 'status-indicator';
+    if (status) {
+        elements.contextStatus.classList.add(status);
+    }
+}
+
+async function isContextLoaded() {
+    try {
+        const status = await window.electronAPI.getLLMStatus();
+        return status.hasTranscriptionLoaded;
+    } catch (error) {
+        console.error('Failed to check context status:', error);
+        return false;
+    }
+}
+
+// Add rename dialog functionality
+function showRenameDialog(transcription) {
+    const currentName = transcription.customName || transcription.fileName;
+    
+    // Create modal dialog
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Rename Transcription</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="transcriptionName">Name:</label>
+                <input type="text" id="transcriptionName" value="${currentName}" placeholder="Enter transcription name">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelRename">Cancel</button>
+                <button class="btn btn-primary" id="saveRename">Save</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Focus on input
+    const nameInput = modal.querySelector('#transcriptionName');
+    nameInput.focus();
+    nameInput.select();
+    
+    // Event listeners
+    const closeModal = () => {
+        document.body.removeChild(modal);
+    };
+    
+    modal.querySelector('.modal-close').addEventListener('click', closeModal);
+    modal.querySelector('#cancelRename').addEventListener('click', closeModal);
+    
+    modal.querySelector('#saveRename').addEventListener('click', async () => {
+        const newName = nameInput.value.trim();
+        if (!newName) {
+            showToast('Please enter a name', 'error');
+            return;
+        }
+        
+        try {
+            await window.electronAPI.updateTranscriptionName(transcription.fileName, newName);
+            showToast('Transcription renamed successfully', 'success');
+            closeModal();
+            loadTranscriptions(); // Refresh the list
+        } catch (error) {
+            showToast('Failed to rename transcription: ' + error.message, 'error');
+        }
+    });
+    
+    // Close on escape key
+    nameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+        } else if (e.key === 'Enter') {
+            modal.querySelector('#saveRename').click();
+        }
+    });
+    
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+}

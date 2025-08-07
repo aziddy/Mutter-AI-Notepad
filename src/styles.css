@@ -196,6 +196,38 @@ body {
     font-size: 1.2rem;
 }
 
+.transcription-name-input {
+    margin: 16px 0;
+}
+
+.transcription-name-input label {
+    display: block;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 8px;
+    font-size: 0.875rem;
+}
+
+.transcription-name-input input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.transcription-name-input input:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.transcription-name-input input::placeholder {
+    color: #9CA3AF;
+}
+
 /* Progress Section */
 .progress-section {
     display: flex;
@@ -580,6 +612,45 @@ body {
     gap: 8px;
 }
 
+.llm-status {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.status-indicator {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: #6C757D;
+    color: white;
+}
+
+.status-indicator.ready {
+    background: #28A745;
+}
+
+.status-indicator.loading {
+    background: #FFC107;
+    color: #212529;
+}
+
+.status-indicator.error {
+    background: #DC3545;
+}
+
+.llm-management {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    padding: 15px;
+    background: rgba(99, 102, 241, 0.05);
+    border-radius: 6px;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
 .api-key-input {
     display: flex;
     gap: 10px;
@@ -623,6 +694,7 @@ body {
     border-radius: 8px;
     padding: 20px;
     margin-top: 20px;
+    position: relative;
 }
 
 .ai-results h4 {
@@ -636,6 +708,42 @@ body {
     line-height: 1.6;
     font-size: 0.9rem;
     white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+/* Streaming indicator */
+.streaming-indicator {
+    display: inline-block;
+    animation: blink 1s infinite;
+    color: #6366F1;
+    font-weight: bold;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+/* Cancel streaming button */
+.cancel-stream-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: #EF4444;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.cancel-stream-btn:hover {
+    opacity: 1;
 }
 
 /* Welcome Screen */
@@ -865,4 +973,150 @@ body {
     flex-direction: column;
     flex: 1;
     min-height: 0;
+}
+
+/* Transcription Name Section */
+.transcription-name-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.transcription-name {
+    margin: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rename-btn {
+    background: none;
+    border: none;
+    color: #6B7280;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    opacity: 0;
+    font-size: 0.8rem;
+}
+
+.transcription-item:hover .rename-btn {
+    opacity: 1;
+}
+
+.rename-btn:hover {
+    background: #F3F4F6;
+    color: #374151;
+}
+
+/* Modal Dialog */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow: hidden;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid #E5E7EB;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #6B7280;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    background: #F3F4F6;
+    color: #374151;
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+.modal-body label {
+    display: block;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 8px;
+    font-size: 0.875rem;
+}
+
+.modal-body input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.modal-body input:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.modal-body input::placeholder {
+    color: #9CA3AF;
+}
+
+.modal-footer {
+    padding: 16px 24px 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    border-top: 1px solid #E5E7EB;
 } 

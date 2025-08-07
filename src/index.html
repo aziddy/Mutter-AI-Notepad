@@ -51,6 +51,11 @@
                         <i class="fas fa-file-audio"></i>
                         <span id="fileName">No file selected</span>
                     </div>
+                    <div class="transcription-name-input">
+                        <label for="transcriptionNameInput">Transcription Name:</label>
+                        <input type="text" id="transcriptionNameInput"
+                            placeholder="Enter a name for this transcription">
+                    </div>
                     <button id="transcribeBtn" class="btn btn-secondary" disabled>
                         <i class="fas fa-play"></i>
                         Start Transcription
@@ -165,11 +170,27 @@
                     <!-- AI Features -->
                     <div class="ai-features">
                         <div class="ai-header">
-                            <h3><i class="fas fa-robot"></i> AI Features</h3>
-                            <div class="api-key-input">
-                                <input type="password" id="apiKeyInput" placeholder="Enter OpenAI API Key (optional)">
-                                <button id="saveApiKeyBtn" class="btn btn-small">Save</button>
+                            <h3><i class="fas fa-robot"></i> AI Features (Local Qwen3 Model)</h3>
+                            <div class="llm-status">
+                                <span id="llmStatus" class="status-indicator">Not Loaded</span>
+                                <span id="contextStatus" class="status-indicator">No Context</span>
                             </div>
+                        </div>
+
+                        <!-- LLM Management -->
+                        <div class="llm-management">
+                            <button id="initializeLLMBtn" class="btn btn-primary">
+                                <i class="fas fa-power-off"></i>
+                                Load LLM Model
+                            </button>
+                            <button id="loadContextBtn" class="btn btn-outline" disabled>
+                                <i class="fas fa-upload"></i>
+                                Load Transcription into Context
+                            </button>
+                            <button id="clearContextBtn" class="btn btn-outline" disabled>
+                                <i class="fas fa-trash"></i>
+                                Clear Context
+                            </button>
                         </div>
 
                         <div class="ai-actions">
@@ -186,7 +207,7 @@
                         <div class="question-section">
                             <div class="question-input">
                                 <input type="text" id="questionInput"
-                                    placeholder="Ask a question about the transcription..." disabled>
+                                    placeholder="Ask any question (general or about transcription)..." disabled>
                                 <button id="askQuestionBtn" class="btn btn-outline" disabled>
                                     <i class="fas fa-question"></i>
                                     Ask
@@ -218,7 +239,7 @@
                             </div>
                             <div class="feature">
                                 <i class="fas fa-robot"></i>
-                                <span>AI-Enhanced Analysis</span>
+                                <span>Local Qwen3 AI Analysis</span>
                             </div>
                         </div>
                     </div>
@@ -235,6 +256,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="renderer.js"></script>
 </body>
 

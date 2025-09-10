@@ -1960,4 +1960,49 @@ body {
     color: #374151;
 }
 
+/* Markdown Tables */
+.ai-results-content table.markdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.875rem;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ai-results-content table.markdown-table tr:first-child {
+    background: #F3F4F6;
+    font-weight: 600;
+}
+
+.ai-results-content table.markdown-table tr:nth-child(even) {
+    background: #F9FAFB;
+}
+
+.ai-results-content table.markdown-table td {
+    padding: 10px 12px;
+    border: 1px solid #E5E7EB;
+    text-align: left;
+    vertical-align: top;
+    line-height: 1.4;
+}
+
+.ai-results-content table.markdown-table td:first-child {
+    font-weight: 500;
+    background: rgba(79, 70, 229, 0.05);
+}
+
+.ai-results-content table.markdown-table td strong {
+    color: #1F2937;
+}
+
+.ai-results-content table.markdown-table td code {
+    background: #F3F4F6;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.8em;
+}
+
  

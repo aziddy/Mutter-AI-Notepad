@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { TranscriptionData, LLMStatus, TabType, ToastMessage, SRTEntry } from '../types';
+import { TranscriptionData, LLMStatus, TabType, ToastMessage, SRTEntry, TranscriptionAIState } from '../types';
 
 // State interface
 interface AppState {
@@ -9,6 +9,7 @@ interface AppState {
   srtEntries: SRTEntry[];
   srtContent: string;
   currentPlayingEntry: SRTEntry | null;
+  currentTranscriptionId: string | null; // Track which transcription is currently loaded
 
   // UI State
   activeTab: TabType;
@@ -23,11 +24,7 @@ interface AppState {
 
   // LLM State
   llmStatus: LLMStatus | null;
-  aiResults: {
-    title: string;
-    content: string;
-    visible: boolean;
-  };
+  // aiResults moved to per-transcription state
 
   // Toast messages
   toastMessages: ToastMessage[];
@@ -35,7 +32,7 @@ interface AppState {
 
 // Action types
 type AppAction =
-  | { type: 'SET_CURRENT_TRANSCRIPTION'; payload: { transcription: string; jsonData: any; srtContent?: string } }
+  | { type: 'SET_CURRENT_TRANSCRIPTION'; payload: { transcription: string; jsonData: any; srtContent?: string; transcriptionId: string } }
   | { type: 'SET_AUDIO_FILE'; payload: string | null }
   | { type: 'SET_SRT_ENTRIES'; payload: SRTEntry[] }
   | { type: 'SET_SRT_CONTENT'; payload: string }
@@ -51,8 +48,10 @@ type AppAction =
   | { type: 'HIDE_FILE_INFO' }
   | { type: 'SET_TRANSCRIPTIONS'; payload: TranscriptionData[] }
   | { type: 'SET_LLM_STATUS'; payload: LLMStatus }
-  | { type: 'SET_AI_RESULTS'; payload: { title: string; content: string } }
-  | { type: 'HIDE_AI_RESULTS' }
+  | { type: 'UPDATE_TRANSCRIPTION_AI_STATE'; payload: { transcriptionId: string; aiState: Partial<TranscriptionAIState> } }
+  | { type: 'SET_TRANSCRIPTION_CONTEXT'; payload: { transcriptionId: string; hasContext: boolean } }
+  | { type: 'SET_TRANSCRIPTION_AI_RESULTS'; payload: { transcriptionId: string; title: string; content: string } }
+  | { type: 'HIDE_TRANSCRIPTION_AI_RESULTS'; payload: { transcriptionId: string } }
   | { type: 'ADD_TOAST'; payload: ToastMessage }
   | { type: 'REMOVE_TOAST'; payload: string };
 
@@ -64,6 +63,7 @@ const initialState: AppState = {
   srtEntries: [],
   srtContent: '',
   currentPlayingEntry: null,
+  currentTranscriptionId: null,
 
   activeTab: 'text',
   showWelcomeScreen: true,
@@ -75,11 +75,6 @@ const initialState: AppState = {
   transcriptions: [],
 
   llmStatus: null,
-  aiResults: {
-    title: '',
-    content: '',
-    visible: false,
-  },
 
   toastMessages: [],
 };
@@ -93,6 +88,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         currentTranscription: action.payload.transcription,
         currentJsonData: action.payload.jsonData,
         srtContent: action.payload.srtContent || '',
+        currentTranscriptionId: action.payload.transcriptionId,
       };
 
     case 'SET_AUDIO_FILE':
@@ -195,23 +191,85 @@ function appReducer(state: AppState, action: AppAction): AppState {
         llmStatus: action.payload,
       };
 
-    case 'SET_AI_RESULTS':
+    case 'UPDATE_TRANSCRIPTION_AI_STATE':
       return {
         ...state,
-        aiResults: {
-          title: action.payload.title,
-          content: action.payload.content,
-          visible: true,
-        },
+        transcriptions: state.transcriptions.map(transcription =>
+          transcription.fileName === action.payload.transcriptionId
+            ? {
+                ...transcription,
+                aiState: {
+                  hasContext: false,
+                  aiResults: { title: '', content: '', visible: false },
+                  ...transcription.aiState,
+                  ...action.payload.aiState,
+                }
+              }
+            : transcription
+        ),
       };
 
-    case 'HIDE_AI_RESULTS':
+    case 'SET_TRANSCRIPTION_CONTEXT':
       return {
         ...state,
-        aiResults: {
-          ...state.aiResults,
-          visible: false,
-        },
+        transcriptions: state.transcriptions.map(transcription =>
+          transcription.fileName === action.payload.transcriptionId
+            ? {
+                ...transcription,
+                aiState: {
+                  hasContext: false,
+                  aiResults: { title: '', content: '', visible: false },
+                  ...transcription.aiState,
+                  hasContext: action.payload.hasContext,
+                  lastContextLoadTime: action.payload.hasContext ? new Date() : transcription.aiState?.lastContextLoadTime,
+                }
+              }
+            : transcription
+        ),
+      };
+
+    case 'SET_TRANSCRIPTION_AI_RESULTS':
+      return {
+        ...state,
+        transcriptions: state.transcriptions.map(transcription =>
+          transcription.fileName === action.payload.transcriptionId
+            ? {
+                ...transcription,
+                aiState: {
+                  hasContext: false,
+                  aiResults: { title: '', content: '', visible: false },
+                  ...transcription.aiState,
+                  aiResults: {
+                    title: action.payload.title,
+                    content: action.payload.content,
+                    visible: true,
+                  },
+                }
+              }
+            : transcription
+        ),
+      };
+
+    case 'HIDE_TRANSCRIPTION_AI_RESULTS':
+      return {
+        ...state,
+        transcriptions: state.transcriptions.map(transcription =>
+          transcription.fileName === action.payload.transcriptionId
+            ? {
+                ...transcription,
+                aiState: {
+                  ...transcription.aiState,
+                  hasContext: transcription.aiState?.hasContext || false,
+                  aiResults: {
+                    ...transcription.aiState?.aiResults,
+                    title: transcription.aiState?.aiResults?.title || '',
+                    content: transcription.aiState?.aiResults?.content || '',
+                    visible: false,
+                  },
+                }
+              }
+            : transcription
+        ),
       };
 
     case 'ADD_TOAST':
@@ -255,4 +313,20 @@ export function useAppContext() {
     throw new Error('useAppContext must be used within an AppProvider');
   }
   return context;
+}
+
+// Helper function to get current transcription's AI state
+export function getCurrentTranscriptionAIState(state: AppState): TranscriptionAIState {
+  if (!state.currentTranscriptionId) {
+    return {
+      hasContext: false,
+      aiResults: { title: '', content: '', visible: false }
+    };
+  }
+
+  const transcription = state.transcriptions.find(t => t.fileName === state.currentTranscriptionId);
+  return transcription?.aiState || {
+    hasContext: false,
+    aiResults: { title: '', content: '', visible: false }
+  };
 }

@@ -28,9 +28,15 @@ class LLMService {
       selectedModel: '',
       availableModels: []
     };
+
+    // User preferences
+    this.userPreferences = {
+      preferredAITab: 'local' // 'local' or 'api'
+    };
     
     // Load saved configuration
     this.loadConfiguration();
+    this.loadUserPreferences();
   }
 
   // Configuration management
@@ -53,6 +59,38 @@ class LLMService {
     } catch (error) {
       console.error('Failed to save LLM configuration:', error);
     }
+  }
+
+  // User preferences management
+  loadUserPreferences() {
+    try {
+      const preferencesPath = path.join(process.cwd(), 'user-preferences.json');
+      if (fs.existsSync(preferencesPath)) {
+        const preferences = JSON.parse(fs.readFileSync(preferencesPath, 'utf-8'));
+        this.userPreferences = { ...this.userPreferences, ...preferences };
+      }
+    } catch (error) {
+      console.warn('Failed to load user preferences:', error);
+    }
+  }
+
+  saveUserPreferences() {
+    try {
+      const preferencesPath = path.join(process.cwd(), 'user-preferences.json');
+      fs.writeFileSync(preferencesPath, JSON.stringify(this.userPreferences, null, 2));
+    } catch (error) {
+      console.error('Failed to save user preferences:', error);
+    }
+  }
+
+  getUserPreferences() {
+    return this.userPreferences;
+  }
+
+  updateUserPreferences(newPreferences) {
+    this.userPreferences = { ...this.userPreferences, ...newPreferences };
+    this.saveUserPreferences();
+    return { success: true, message: 'User preferences updated successfully' };
   }
 
   updateConfiguration(newConfig) {
@@ -174,9 +212,10 @@ class LLMService {
     // Clean up local model resources
     if (this.session) {
       try {
-        this.session.setChatHistory([]);
+        this.session.dispose();
+        this.session = null;
       } catch (error) {
-        console.warn('Error cleaning up session:', error);
+        console.warn('Error disposing session:', error);
       }
     }
 
@@ -357,16 +396,28 @@ class LLMService {
   }
 
   async loadTranscriptionIntoLocalContext(transcription) {
-    // Instead of disposing and recreating, just clear the chat history
-    // This is more reliable and avoids "No sequences left" errors
+    // Force a complete reset of session, context, and sequence
+    // This ensures we start with a truly clean context with no token accumulation
     if (this.session) {
-      this.session.setChatHistory([]);
-    } else {
-      // Create initial session if it doesn't exist
-      this.session = new this.LlamaChatSession({
-        contextSequence: this.context.getSequence()
-      });
+      console.log("🔄 Disposing previous session");
+      this.session.dispose();
+      this.session = null;
     }
+
+    // CRITICAL: Dispose and recreate the context completely
+    // The context is where tokens accumulate, so we need a fresh one
+    if (this.context) {
+      console.log("🗑️ Disposing previous context to prevent token accumulation");
+      this.context.dispose();
+      this.context = null;
+    }
+
+    // Create completely fresh context and session
+    console.log("🆕 Creating fresh context and session");
+    this.context = await this.model.createContext();
+    this.session = new this.LlamaChatSession({
+      contextSequence: this.context.getSequence()
+    });
 
     // Load transcription into context with a system-like message
     const contextMessage = `Here is a meeting transcript context:\n\n${transcription}`;
@@ -390,16 +441,21 @@ class LLMService {
   }
 
   async loadTranscriptionIntoAPIContext(transcription) {
+    // Clear any existing transcription first
+    if (this.currentTranscription) {
+      console.log("🔄 Replacing existing transcription in API context");
+    }
+
     // For API models, we'll store the transcription in memory
     // and include it in prompts as needed
     this.currentTranscription = transcription;
     this.hasTranscriptionLoaded = true;
-    
+
     // Count tokens for context loading
     const contextTokens = await this.countTokens(transcription);
     this.tokenCounts.contextTokens = contextTokens;
-    
-    console.log(`📝 Transcription stored for API context (${contextTokens} tokens)`);
+
+    console.log(`📝 New transcription stored for API context (${contextTokens} tokens)`);
     return { 
       success: true, 
       message: "Transcription loaded successfully", 
@@ -414,9 +470,17 @@ class LLMService {
 
     try {
       if (this.apiConfig.useLocalModel) {
-        // Simply clear chat history instead of disposing sessions
+        // Dispose of both session and context completely to ensure full reset
         if (this.session) {
-          this.session.setChatHistory([]);
+          console.log("🗑️ Disposing session");
+          this.session.dispose();
+          this.session = null;
+        }
+
+        if (this.context) {
+          console.log("🗑️ Disposing context to clear all tokens");
+          this.context.dispose();
+          this.context = null;
         }
       }
 
@@ -431,7 +495,7 @@ class LLMService {
         totalTokens: 0
       };
 
-      console.log("LLM context cleared and token counts reset");
+      console.log("✅ LLM context cleared, transcription removed, and token counts reset");
       return { success: true, message: "Context cleared successfully" };
     } catch (error) {
       console.error('Error clearing context:', error);
@@ -502,7 +566,7 @@ class LLMService {
       let messages = [];
       
       if (this.hasTranscriptionLoaded && this.currentTranscription) {
-        // Add system message with transcription context
+        // Add system message with full transcription context
         messages.push({
           role: 'system',
           content: `You have access to the following meeting transcript context:\n\n${this.currentTranscription}\n\nPlease use this context to answer questions and provide analysis.`
@@ -760,6 +824,19 @@ async function generateInsightsStream(transcription, onChunk, apiKey) {
   return await llmService.generateInsightsStream(onChunk, transcription);
 }
 
+// User preferences functions
+async function getUserPreferences() {
+  return llmService.getUserPreferences();
+}
+
+async function updateUserPreferences(preferences) {
+  try {
+    return llmService.updateUserPreferences(preferences);
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+}
+
 module.exports = {
   initializeLLM,
   loadTranscriptionIntoContext,
@@ -776,5 +853,7 @@ module.exports = {
   generateSummaryStream,
   askQuestionStream,
   generateInsightsStream,
+  getUserPreferences,
+  updateUserPreferences,
   LLMService
 }; 

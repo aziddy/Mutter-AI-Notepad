@@ -10,6 +10,19 @@ export interface TranscriptionData {
   hasJson: boolean;
   hasSrt: boolean;
   folderPath: string;
+  // AI-specific state for this transcription
+  aiState?: TranscriptionAIState;
+}
+
+// AI state specific to each transcription
+export interface TranscriptionAIState {
+  hasContext: boolean;
+  aiResults: {
+    title: string;
+    content: string;
+    visible: boolean;
+  };
+  lastContextLoadTime?: Date;
 }
 
 export interface TranscriptionJsonData {
@@ -92,6 +105,10 @@ export interface AIModel {
   type?: 'local' | 'api';
 }
 
+export interface UserPreferences {
+  preferredAITab: 'local' | 'api';
+}
+
 // UI State types
 export type TabType = 'text' | 'srt';
 
@@ -159,6 +176,13 @@ export interface ElectronAPI {
   // Transcription management
   getTranscriptions: () => Promise<TranscriptionData[]>;
   updateTranscriptionName: (folderName: string, newName: string) => Promise<{
+    success: boolean;
+    message: string;
+  }>;
+
+  // User preferences management
+  getUserPreferences: () => Promise<UserPreferences>;
+  updateUserPreferences: (preferences: Partial<UserPreferences>) => Promise<{
     success: boolean;
     message: string;
   }>;

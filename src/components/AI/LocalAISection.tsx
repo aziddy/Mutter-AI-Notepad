@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { useAppContext } from '../../contexts/AppContext';
+import { useAppContext, getCurrentTranscriptionAIState } from '../../contexts/AppContext';
 import { useElectron } from '../../hooks/useElectron';
 
 interface LocalAISectionProps {
@@ -28,6 +28,9 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
   const [isLoadingContext, setIsLoadingContext] = useState(false);
   const [question, setQuestion] = useState('');
   const [streamingCancel, setStreamingCancel] = useState<(() => void) | null>(null);
+
+  // Get current transcription's AI state
+  const currentAIState = getCurrentTranscriptionAIState(state);
 
   // Load LLM status
   const loadLLMStatus = useCallback(async () => {
@@ -104,6 +107,17 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
       const result = await loadTranscriptionIntoContext(state.currentTranscription);
 
       if (result.success) {
+        // Update transcription AI state
+        if (state.currentTranscriptionId) {
+          dispatch({
+            type: 'SET_TRANSCRIPTION_CONTEXT',
+            payload: {
+              transcriptionId: state.currentTranscriptionId,
+              hasContext: true
+            }
+          });
+        }
+
         dispatch({
           type: 'ADD_TOAST',
           payload: {
@@ -148,6 +162,17 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
       const result = await clearLLMContext();
 
       if (result.success) {
+        // Update transcription AI state
+        if (state.currentTranscriptionId) {
+          dispatch({
+            type: 'SET_TRANSCRIPTION_CONTEXT',
+            payload: {
+              transcriptionId: state.currentTranscriptionId,
+              hasContext: false
+            }
+          });
+        }
+
         dispatch({
           type: 'ADD_TOAST',
           payload: {
@@ -181,7 +206,7 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
 
   // Generate summary with streaming
   const handleGenerateSummary = useCallback(async () => {
-    if (!state.currentTranscription && !llmStatus?.hasTranscriptionLoaded) {
+    if (!state.currentTranscription && !currentAIState.hasContext) {
       dispatch({
         type: 'ADD_TOAST',
         payload: {
@@ -197,7 +222,7 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
     onAIResult('Summary', '', true);
 
     const cleanup = generateSummaryStream(
-      llmStatus?.hasTranscriptionLoaded ? null : state.currentTranscription,
+      currentAIState.hasContext ? null : state.currentTranscription,
       // onChunk
       (chunk: string) => {
         streamedContent += chunk;
@@ -223,11 +248,11 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
     );
 
     setStreamingCancel(() => cleanup);
-  }, [state.currentTranscription, llmStatus, generateSummaryStream, onAIResult, dispatch]);
+  }, [state.currentTranscription, currentAIState.hasContext, generateSummaryStream, onAIResult, dispatch]);
 
   // Generate insights with streaming
   const handleGenerateInsights = useCallback(async () => {
-    if (!state.currentTranscription && !llmStatus?.hasTranscriptionLoaded) {
+    if (!state.currentTranscription && !currentAIState.hasContext) {
       dispatch({
         type: 'ADD_TOAST',
         payload: {
@@ -243,7 +268,7 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
     onAIResult('Insights & Analysis', '', true);
 
     const cleanup = generateInsightsStream(
-      llmStatus?.hasTranscriptionLoaded ? null : state.currentTranscription,
+      currentAIState.hasContext ? null : state.currentTranscription,
       // onChunk
       (chunk: string) => {
         streamedContent += chunk;
@@ -269,12 +294,12 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
     );
 
     setStreamingCancel(() => cleanup);
-  }, [state.currentTranscription, llmStatus, generateInsightsStream, onAIResult, dispatch]);
+  }, [state.currentTranscription, currentAIState.hasContext, generateInsightsStream, onAIResult, dispatch]);
 
   // Ask question with streaming
   const handleAskQuestion = useCallback(async () => {
     if (!question.trim()) return;
-    if (!state.currentTranscription && !llmStatus?.hasTranscriptionLoaded) {
+    if (!state.currentTranscription && !currentAIState.hasContext) {
       dispatch({
         type: 'ADD_TOAST',
         payload: {
@@ -291,7 +316,7 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
     onAIResult(`Q: ${questionText}`, '', true);
 
     const cleanup = askQuestionStream(
-      llmStatus?.hasTranscriptionLoaded ? null : state.currentTranscription,
+      currentAIState.hasContext ? null : state.currentTranscription,
       questionText,
       // onChunk
       (chunk: string) => {
@@ -319,7 +344,7 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
     );
 
     setStreamingCancel(() => cleanup);
-  }, [question, state.currentTranscription, llmStatus, askQuestionStream, onAIResult, dispatch]);
+  }, [question, state.currentTranscription, currentAIState.hasContext, askQuestionStream, onAIResult, dispatch]);
 
   // Cancel streaming
   const handleCancelStreaming = useCallback(() => {
@@ -339,7 +364,7 @@ const LocalAISection: React.FC<LocalAISectionProps> = ({
   }, [streamingCancel, onStreamingCancel, dispatch]);
 
   const isReady = llmStatus?.isInitialized && llmStatus?.config?.useLocalModel;
-  const hasContext = llmStatus?.hasTranscriptionLoaded;
+  const hasContext = currentAIState.hasContext;
 
   return (
     <div className="ai-section local-ai-section">

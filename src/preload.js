@@ -125,5 +125,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeAllListeners(`llm-stream-complete-${streamId}`);
       ipcRenderer.removeAllListeners(`llm-stream-error-${streamId}`);
     };
-  }
+  },
+
+  // User preferences APIs
+  getUserPreferences: () => ipcRenderer.invoke('get-user-preferences'),
+  updateUserPreferences: (preferences) => ipcRenderer.invoke('update-user-preferences', preferences)
 }); 

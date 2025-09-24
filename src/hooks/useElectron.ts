@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { TranscriptionData, LLMStatus, LLMConfig, AIModel } from '../types';
+import { TranscriptionData, LLMStatus, LLMConfig, AIModel, UserPreferences } from '../types';
 
 export const useElectron = () => {
   // File operations
@@ -127,6 +127,21 @@ export const useElectron = () => {
     return await window.electronAPI.updateTranscriptionName(folderName, newName);
   }, []);
 
+  // User preferences operations
+  const getUserPreferences = useCallback(async (): Promise<UserPreferences> => {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return await window.electronAPI.getUserPreferences();
+  }, []);
+
+  const updateUserPreferences = useCallback(async (preferences: Partial<UserPreferences>) => {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return await window.electronAPI.updateUserPreferences(preferences);
+  }, []);
+
   return {
     // File operations
     selectFile,
@@ -150,5 +165,9 @@ export const useElectron = () => {
     // Transcription management
     getTranscriptions,
     updateTranscriptionName,
+
+    // User preferences
+    getUserPreferences,
+    updateUserPreferences,
   };
 };

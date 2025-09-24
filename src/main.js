@@ -2,12 +2,12 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const { transcribeAudio } = require('./transcription');
-const { 
-  generateSummary, 
-  askQuestion, 
-  generateInsights, 
-  generateSummaryStream, 
-  askQuestionStream, 
+const {
+  generateSummary,
+  askQuestion,
+  generateInsights,
+  generateSummaryStream,
+  askQuestionStream,
   generateInsightsStream,
   initializeLLM,
   loadTranscriptionIntoContext,
@@ -16,7 +16,9 @@ const {
   getAvailableModels,
   getExternalAPIModels,
   testConnection,
-  updateLLMConfiguration
+  updateLLMConfiguration,
+  getUserPreferences,
+  updateUserPreferences
 } = require('./llm');
 
 let mainWindow;
@@ -219,6 +221,23 @@ ipcMain.handle('update-llm-configuration', async (event, config) => {
     return await updateLLMConfiguration(config);
   } catch (error) {
     throw new Error(`Failed to update LLM configuration: ${error.message}`);
+  }
+});
+
+// User preferences handlers
+ipcMain.handle('get-user-preferences', async (event) => {
+  try {
+    return await getUserPreferences();
+  } catch (error) {
+    throw new Error(`Failed to get user preferences: ${error.message}`);
+  }
+});
+
+ipcMain.handle('update-user-preferences', async (event, preferences) => {
+  try {
+    return await updateUserPreferences(preferences);
+  } catch (error) {
+    throw new Error(`Failed to update user preferences: ${error.message}`);
   }
 });
 

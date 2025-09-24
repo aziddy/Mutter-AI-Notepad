@@ -148,3 +148,4 @@ vite.config.ts.timestamp-*
 
 /models/*
 llm-config.json
+user-preferences.json

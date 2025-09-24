@@ -1,5 +1,6 @@
-import React, { useCallback, useState } from 'react';
-import { useAppContext } from '../../contexts/AppContext';
+import React, { useCallback, useState, useEffect } from 'react';
+import { useAppContext, getCurrentTranscriptionAIState } from '../../contexts/AppContext';
+import { useElectron } from '../../hooks/useElectron';
 import AudioPlayer from '../Audio/AudioPlayer';
 import SRTViewer from './SRTViewer';
 import LocalAISection from '../AI/LocalAISection';
@@ -13,16 +14,48 @@ interface TranscriptionResultsProps {
 
 const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsClick }) => {
   const { state, dispatch } = useAppContext();
-  
-  // AI Results state
-  const [aiResult, setAIResult] = useState<{
+  const { getUserPreferences, updateUserPreferences } = useElectron();
+
+  // AI Results state - using local streaming state, but persistent results come from context
+  const [streamingResult, setStreamingResult] = useState<{
     title: string;
     content: string;
     isStreaming: boolean;
   } | null>(null);
-  
+
+  // Get current transcription's AI state
+  const currentAIState = getCurrentTranscriptionAIState(state);
+
   // AI tab state
   const [activeAITab, setActiveAITab] = useState<'local' | 'api'>('local');
+
+  // AI panel collapse state
+  const [isAIPanelCollapsed, setIsAIPanelCollapsed] = useState(false);
+
+  // Load user preferences on mount
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const preferences = await getUserPreferences();
+        setActiveAITab(preferences.preferredAITab);
+      } catch (error) {
+        console.warn('Failed to load user preferences:', error);
+        // Keep default value
+      }
+    };
+
+    loadPreferences();
+  }, [getUserPreferences]);
+
+  // Handle AI tab change and save preference
+  const handleAITabChange = useCallback(async (tab: 'local' | 'api') => {
+    setActiveAITab(tab);
+    try {
+      await updateUserPreferences({ preferredAITab: tab });
+    } catch (error) {
+      console.warn('Failed to save AI tab preference:', error);
+    }
+  }, [updateUserPreferences]);
 
   const handleCopyTranscription = () => {
     if (!state.currentTranscription) return;
@@ -72,18 +105,39 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
 
   // Handle AI results
   const handleAIResult = useCallback((title: string, content: string, isStreaming = false) => {
-    setAIResult({ title, content, isStreaming });
-  }, []);
+    if (isStreaming) {
+      // For streaming, use local state
+      setStreamingResult({ title, content, isStreaming });
+    } else {
+      // For completed results, store in per-transcription state
+      setStreamingResult(null); // Clear streaming state
+      if (state.currentTranscriptionId) {
+        dispatch({
+          type: 'SET_TRANSCRIPTION_AI_RESULTS',
+          payload: {
+            transcriptionId: state.currentTranscriptionId,
+            title,
+            content
+          }
+        });
+      }
+    }
+  }, [state.currentTranscriptionId, dispatch]);
 
   // Handle streaming cancellation
   const handleStreamingCancel = useCallback(() => {
-    setAIResult(null);
+    setStreamingResult(null);
   }, []);
 
   // Handle settings modal open
   const handleConfigureClick = useCallback(() => {
     onSettingsClick?.();
   }, [onSettingsClick]);
+
+  // Handle AI panel collapse toggle
+  const handleToggleAIPanel = useCallback(() => {
+    setIsAIPanelCollapsed(!isAIPanelCollapsed);
+  }, [isAIPanelCollapsed]);
 
   return (
     <div className="results-section">
@@ -189,59 +243,70 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
       </div>
 
       {/* AI Features */}
-      <div className="ai-features">
+      <div className={`ai-features ${isAIPanelCollapsed ? 'collapsed' : ''}`}>
         <div className="ai-header">
           <h3><i className="fas fa-robot"></i> AI Features</h3>
-        </div>
-        
-        {/* AI Tabs */}
-        <div className="ai-tabs transcription-tabs">
           <button
-            className={`tab-btn ${activeAITab === 'local' ? 'active' : ''}`}
-            onClick={() => setActiveAITab('local')}
+            className="btn btn-icon ai-collapse-btn"
+            onClick={handleToggleAIPanel}
+            title={isAIPanelCollapsed ? 'Expand AI Panel' : 'Collapse AI Panel'}
           >
-            <i className="fas fa-desktop"></i>
-            Local Model
-          </button>
-          <button
-            className={`tab-btn ${activeAITab === 'api' ? 'active' : ''}`}
-            onClick={() => setActiveAITab('api')}
-          >
-            <i className="fas fa-cloud"></i>
-            External API
+            <i className={`fas ${isAIPanelCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'}`}></i>
           </button>
         </div>
+        {/* Collapsible AI Content */}
+        {!isAIPanelCollapsed && (
+          <div className="ai-collapsible-content">
+            {/* AI Tabs */}
+            <div className="ai-tabs transcription-tabs">
+              <button
+                className={`tab-btn ${activeAITab === 'local' ? 'active' : ''}`}
+                onClick={() => handleAITabChange('local')}
+              >
+                <i className="fas fa-desktop"></i>
+                Local Model
+              </button>
+              <button
+                className={`tab-btn ${activeAITab === 'api' ? 'active' : ''}`}
+                onClick={() => handleAITabChange('api')}
+              >
+                <i className="fas fa-cloud"></i>
+                External API
+              </button>
+            </div>
 
-        {/* AI Content */}
-        <div className="ai-content">
-          <div className={`tab-content ${activeAITab === 'local' ? 'active' : ''}`}>
-            {activeAITab === 'local' && (
-              <LocalAISection
-                onAIResult={handleAIResult}
-                onStreamingCancel={handleStreamingCancel}
-              />
-            )}
-          </div>
-          
-          <div className={`tab-content ${activeAITab === 'api' ? 'active' : ''}`}>
-            {activeAITab === 'api' && (
-              <APISection
-                onAIResult={handleAIResult}
-                onConfigureClick={handleConfigureClick}
-                onStreamingCancel={handleStreamingCancel}
-              />
-            )}
-          </div>
-        </div>
+            {/* AI Content */}
+            <div className="ai-content">
+              <div className={`tab-content ${activeAITab === 'local' ? 'active' : ''}`}>
+                {activeAITab === 'local' && (
+                  <LocalAISection
+                    onAIResult={handleAIResult}
+                    onStreamingCancel={handleStreamingCancel}
+                  />
+                )}
+              </div>
 
-        {/* AI Results */}
-        <AIResults
-          title={aiResult?.title || ''}
-          content={aiResult?.content || ''}
-          visible={!!aiResult}
-          isStreaming={aiResult?.isStreaming || false}
-          onCancel={handleStreamingCancel}
-        />
+              <div className={`tab-content ${activeAITab === 'api' ? 'active' : ''}`}>
+                {activeAITab === 'api' && (
+                  <APISection
+                    onAIResult={handleAIResult}
+                    onConfigureClick={handleConfigureClick}
+                    onStreamingCancel={handleStreamingCancel}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* AI Results */}
+            <AIResults
+              title={streamingResult?.title || currentAIState.aiResults.title}
+              content={streamingResult?.content || currentAIState.aiResults.content}
+              visible={!!streamingResult || currentAIState.aiResults.visible}
+              isStreaming={streamingResult?.isStreaming || false}
+              onCancel={handleStreamingCancel}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

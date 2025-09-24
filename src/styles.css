@@ -594,6 +594,11 @@ body {
 .ai-features {
     border-top: 1px solid rgba(0, 0, 0, 0.1);
     padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.ai-features.collapsed {
+    padding-bottom: 20px;
 }
 
 .ai-header {
@@ -610,6 +615,45 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+/* AI Collapse Button */
+.ai-collapse-btn {
+    margin-left: auto;
+    padding: 8px;
+    border: none;
+    background: transparent;
+    color: #6B7280;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.ai-collapse-btn:hover {
+    background: #F3F4F6;
+    color: #374151;
+    transform: scale(1.1);
+}
+
+/* Collapsible Content */
+.ai-collapsible-content {
+    animation: expandPanel 0.3s ease-out;
+    transform-origin: top;
+}
+
+.ai-features.collapsed .ai-header {
+    margin-bottom: 0;
+}
+
+@keyframes expandPanel {
+    from {
+        opacity: 0;
+        transform: scaleY(0.3);
+    }
+    to {
+        opacity: 1;
+        transform: scaleY(1);
+    }
 }
 
 /* AI Sections */
@@ -714,7 +758,7 @@ body {
 /* API Context Management */
 .api-context-management {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 10px;
     margin-bottom: 20px;
 }
@@ -1360,7 +1404,7 @@ body {
 }
 
 .section-header {
-    margin-bottom: 24px;
+    margin-bottom: 2px;
 }
 
 .section-header h3 {
@@ -1792,7 +1836,6 @@ body {
     .primary-actions .btn {
         flex: 1;
     }
-}
 }
 
 .setting-actions .btn {

@@ -6,7 +6,7 @@ import LoadingState from '../UI/LoadingState';
 
 const Sidebar: React.FC = () => {
   const { state, dispatch } = useAppContext();
-  const { selectFile, getTranscriptions, updateTranscriptionName } = useElectron();
+  const { selectFile, getTranscriptions, updateTranscriptionName, clearLLMContext } = useElectron();
   
   // Rename state
   const [renamingItem, setRenamingItem] = useState<string | null>(null);
@@ -52,27 +52,59 @@ const Sidebar: React.FC = () => {
     }
   };
 
-  const handleTranscriptionClick = (transcription: TranscriptionData) => {
+  const handleTranscriptionClick = useCallback(async (transcription: TranscriptionData) => {
     // Don't load if currently renaming
     if (renamingItem) return;
-    
+
+    // If switching to a different transcription, clear the LLM context first
+    if (state.currentTranscriptionId && state.currentTranscriptionId !== transcription.fileName) {
+      try {
+        await clearLLMContext();
+        // Clear context state for all transcriptions since backend context is cleared
+        state.transcriptions.forEach(t => {
+          if (t.aiState?.hasContext) {
+            dispatch({
+              type: 'SET_TRANSCRIPTION_CONTEXT',
+              payload: {
+                transcriptionId: t.fileName,
+                hasContext: false
+              }
+            });
+          }
+        });
+
+        // Notify user that context was cleared
+        dispatch({
+          type: 'ADD_TOAST',
+          payload: {
+            id: Date.now().toString(),
+            message: 'AI context cleared when switching transcriptions',
+            type: 'info'
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to clear LLM context when switching transcriptions:', error);
+      }
+    }
+
     dispatch({ type: 'HIDE_WELCOME_SCREEN' });
     dispatch({
       type: 'SET_CURRENT_TRANSCRIPTION',
       payload: {
         transcription: transcription.content,
         jsonData: transcription.jsonData,
-        srtContent: transcription.srtData || ''
+        srtContent: transcription.srtData || '',
+        transcriptionId: transcription.fileName
       }
     });
-    
+
     // Set audio file if available
     if (transcription.jsonData?.metadata?.audioSourceFile) {
       dispatch({ type: 'SET_AUDIO_FILE', payload: transcription.jsonData.metadata.audioSourceFile });
     }
-    
+
     dispatch({ type: 'SHOW_RESULTS' });
-  };
+  }, [renamingItem, state.currentTranscriptionId, state.transcriptions, clearLLMContext, dispatch]);
 
   // Handle rename start
   const handleRenameStart = useCallback((e: React.MouseEvent, transcription: TranscriptionData) => {

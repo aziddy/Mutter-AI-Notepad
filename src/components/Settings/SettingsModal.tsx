@@ -6,9 +6,10 @@ import { LLMConfig, AIModel } from '../../types';
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onConfigurationSaved?: () => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onConfigurationSaved }) => {
   const { dispatch } = useAppContext();
   const {
     getLLMStatus,
@@ -145,10 +146,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           type: 'ADD_TOAST',
           payload: {
             id: Date.now().toString(),
-            message: 'Settings saved successfully!',
+            message: result.message || 'Settings saved successfully!',
             type: 'success'
           }
         });
+        onConfigurationSaved?.();
+        // Emit event to notify other components about configuration change
+        window.dispatchEvent(new CustomEvent('llm-configuration-changed'));
         onClose();
       } else {
         dispatch({
@@ -243,18 +247,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 {formData.useLocalModel && (
                   <div className="engine-config">
                     <div className="config-field">
-                      <label htmlFor="localModelPath">Model Path</label>
+                      <label htmlFor="selectedModel">Local Model</label>
                       <div className="select-wrapper">
                         <select
-                          id="localModelPath"
-                          value={formData.localModelPath || ''}
-                          onChange={(e) => handleInputChange('localModelPath', e.target.value)}
+                          id="selectedModel"
+                          value={formData.selectedModel || ''}
+                          onChange={(e) => handleInputChange('selectedModel', e.target.value)}
                           className="modern-select"
                         >
                           <option value="">Select a model...</option>
                           {availableModels.map((model) => (
-                            <option key={model.id} value={model.path}>
-                              {model.name} ({model.size})
+                            <option key={model.id} value={model.id}>
+                              {model.name}
                             </option>
                           ))}
                         </select>

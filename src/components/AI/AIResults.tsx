@@ -33,14 +33,14 @@ const AIResults: React.FC<AIResultsProps> = ({
     html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
     
     // Handle tables
-    html = html.replace(/^\|(.+)\|$/gm, (match, content) => {
+    html = html.replace(/^\|(.+)\|$/gm, (_match, content) => {
       // Check if this is a header separator line (contains only -, |, :, spaces)
       if (content.match(/^[\s\-\|\:]+$/)) {
         return ''; // Remove separator lines
       }
-      
-      const cells = content.split('|').map(cell => cell.trim());
-      const cellTags = cells.map(cell => `<td>${cell}</td>`).join('');
+
+      const cells = content.split('|').map((cell: string) => cell.trim());
+      const cellTags = cells.map((cell: string) => `<td>${cell}</td>`).join('');
       return `<tr>${cellTags}</tr>`;
     });
     

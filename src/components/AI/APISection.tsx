@@ -44,6 +44,25 @@ const APISection: React.FC<APISectionProps> = ({
     loadLLMStatus();
   }, [loadLLMStatus]);
 
+  // Add effect to reload status when returning from configuration
+  useEffect(() => {
+    const handleFocus = () => {
+      loadLLMStatus();
+    };
+
+    const handleConfigurationChange = () => {
+      loadLLMStatus();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('llm-configuration-changed', handleConfigurationChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('llm-configuration-changed', handleConfigurationChange);
+    };
+  }, [loadLLMStatus]);
+
   // Connect to API
   const handleConnect = useCallback(async () => {
     try {
@@ -413,7 +432,7 @@ const APISection: React.FC<APISectionProps> = ({
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="Ask any question (general or about transcription)..."
               disabled={!isConfigured || !!streamingCancel}
-              onKeyPress={(e) => {
+              onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleAskQuestion();

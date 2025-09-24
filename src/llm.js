@@ -58,13 +58,16 @@ class LLMService {
   updateConfiguration(newConfig) {
     this.apiConfig = { ...this.apiConfig, ...newConfig };
     this.saveConfiguration();
-    
-    // Reset initialization if configuration changed
-    if (this.isInitialized) {
-      this.cleanup();
-    }
-    
-    return { success: true, message: 'Configuration updated successfully' };
+
+    // Always disconnect and clear everything when configuration changes
+    // This ensures a clean state and forces user to reconnect
+    this.cleanup();
+
+    console.log("Configuration updated - disconnected and cleared context");
+    return {
+      success: true,
+      message: 'Configuration updated successfully. Please click Connect to initialize with new settings.'
+    };
   }
 
   async getAvailableModels() {
@@ -159,7 +162,15 @@ class LLMService {
     this.hasTranscriptionLoaded = false;
     this.currentTranscription = null;
     this.apiClient = null;
-    
+
+    // Reset token counts when cleaning up
+    this.tokenCounts = {
+      contextTokens: 0,
+      promptTokens: 0,
+      responseTokens: 0,
+      totalTokens: 0
+    };
+
     // Clean up local model resources
     if (this.session) {
       try {
@@ -168,7 +179,7 @@ class LLMService {
         console.warn('Error cleaning up session:', error);
       }
     }
-    
+
     if (this.context) {
       try {
         this.context.dispose();
@@ -176,10 +187,12 @@ class LLMService {
         console.warn('Error disposing context:', error);
       }
     }
-    
+
     this.session = null;
     this.context = null;
     this.model = null;
+
+    console.log("LLM fully cleaned up - disconnected and context cleared");
   }
 
   // Helper method to count tokens in text
@@ -396,7 +409,7 @@ class LLMService {
 
   async clearContext() {
     if (!this.isInitialized) {
-      throw new Error("LLM not initialized.");
+      throw new Error("LLM not initialized. Please connect to your API first by clicking the 'Connect' button.");
     }
 
     try {
@@ -409,7 +422,7 @@ class LLMService {
 
       this.hasTranscriptionLoaded = false;
       this.currentTranscription = null;
-      
+
       // Reset token counts when clearing context
       this.tokenCounts = {
         contextTokens: 0,
@@ -417,7 +430,7 @@ class LLMService {
         responseTokens: 0,
         totalTokens: 0
       };
-      
+
       console.log("LLM context cleared and token counts reset");
       return { success: true, message: "Context cleared successfully" };
     } catch (error) {
@@ -501,12 +514,17 @@ class LLMService {
       
       if (options.onTextChunk) {
         // Streaming response
+        const modelToUse = this.apiConfig.useLocalModel ? this.apiConfig.selectedModel : this.apiConfig.modelName;
+        if (!modelToUse) {
+          throw new Error('No model selected. Please configure a model in settings.');
+        }
+
         const stream = await this.apiClient.chat.completions.create({
-          model: this.apiConfig.selectedModel,
+          model: modelToUse,
           messages: messages,
           stream: true,
-          temperature: 0.3,
-          max_tokens: 2000
+          temperature: this.apiConfig.temperature || 0.3,
+          max_tokens: this.apiConfig.maxTokens || 2000
         });
 
         let fullResponse = '';
@@ -524,11 +542,16 @@ class LLMService {
         return fullResponse.trim();
       } else {
         // Non-streaming response
+        const modelToUse = this.apiConfig.useLocalModel ? this.apiConfig.selectedModel : this.apiConfig.modelName;
+        if (!modelToUse) {
+          throw new Error('No model selected. Please configure a model in settings.');
+        }
+
         const completion = await this.apiClient.chat.completions.create({
-          model: this.apiConfig.selectedModel,
+          model: modelToUse,
           messages: messages,
-          temperature: 0.3,
-          max_tokens: 2000
+          temperature: this.apiConfig.temperature || 0.3,
+          max_tokens: this.apiConfig.maxTokens || 2000
         });
 
         const response = completion.choices[0].message.content;

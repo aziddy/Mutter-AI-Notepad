@@ -17,12 +17,67 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const path = require('path');
 const fs = require('fs');
 const { DiarizationService } = require('./diarization/diarization-service');
+const { reconcileSpeakersFromSRT } = require('../src/utils/reconcile-speakers');
+const { formatSpeakerTranscript } = require('../src/utils/format-speaker-transcript');
 
 // Configuration
 const CONFIG = {
   expectedMinSpeakers: 1,
   outputFile: 'diarization-test-output.json',
 };
+
+/**
+ * Format seconds to SRT timestamp format (HH:MM:SS,mmm).
+ * @param {number} seconds
+ * @returns {string}
+ */
+function formatSRTTimestamp(seconds) {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.round((seconds % 1) * 1000);
+  return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
+}
+
+/**
+ * Generate SRT content from diarization segments.
+ * @param {Array} segments - Diarization segments with start, end, text
+ * @returns {string}
+ */
+function generateSRTFromDiarization(segments) {
+  if (!segments || segments.length === 0) {
+    return '';
+  }
+
+  return segments
+    .map((seg, i) => {
+      const start = formatSRTTimestamp(seg.start);
+      const end = formatSRTTimestamp(seg.end);
+      return `${i + 1}\n${start} --> ${end}\n${seg.text.trim()}`;
+    })
+    .join('\n\n');
+}
+
+/**
+ * Find the SRT file in the same folder as the audio file.
+ * @param {string} audioFilePath
+ * @returns {string|null}
+ */
+function findSRTFile(audioFilePath) {
+  const folderPath = path.dirname(audioFilePath);
+
+  try {
+    const files = fs.readdirSync(folderPath);
+    const srtFile = files.find((f) => f.endsWith('.srt'));
+    if (srtFile) {
+      return path.join(folderPath, srtFile);
+    }
+  } catch (e) {
+    // Folder not readable
+  }
+
+  return null;
+}
 
 /**
  * Find an existing audio file from previous transcriptions.
@@ -187,6 +242,53 @@ async function runTests(audioFile) {
         });
       }
 
+      // SRT Reconciliation
+      let reconciledEntries = null;
+      let srtContent = null;
+      let srtSource = null;
+
+      const srtPath = findSRTFile(audioFile);
+      if (srtPath && fs.existsSync(srtPath)) {
+        srtContent = fs.readFileSync(srtPath, 'utf-8');
+        srtSource = srtPath;
+      } else if (result.segments && result.segments.length > 0) {
+        // Generate SRT from diarization segments
+        srtContent = generateSRTFromDiarization(result.segments);
+        srtSource = 'generated from diarization';
+      }
+
+      console.log('-'.repeat(60));
+      console.log('  SRT SPEAKER RECONCILIATION');
+      console.log('-'.repeat(60));
+      console.log('');
+
+      if (srtContent) {
+        console.log('  SRT source:', srtSource);
+
+        reconciledEntries = reconcileSpeakersFromSRT(srtContent, result);
+
+        console.log('  SRT entries:', reconciledEntries.length);
+        console.log('');
+        console.log('  Sample reconciled entries (first 5):');
+        console.log('');
+
+        reconciledEntries.slice(0, 5).forEach((entry, i) => {
+          const speaker = entry.speaker || 'UNKNOWN';
+          const conf = (entry.confidence * 100).toFixed(0);
+          const time = `[${entry.startTime.toFixed(2)}s - ${entry.endTime.toFixed(2)}s]`;
+          const text =
+            entry.text.length > 40
+              ? entry.text.substring(0, 40) + '...'
+              : entry.text;
+          console.log(`    ${i + 1}. ${speaker} (${conf}%) ${time}`);
+          console.log(`       "${text}"`);
+          console.log('');
+        });
+      } else {
+        console.log('  No SRT available for reconciliation.');
+        console.log('');
+      }
+
       // Validation
       console.log('-'.repeat(60));
       console.log('  VALIDATION');
@@ -235,9 +337,21 @@ async function runTests(audioFile) {
 
       // Save full output
       const outputPath = path.join(__dirname, '..', CONFIG.outputFile);
-      fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
+      const outputData = {
+        ...result,
+        reconciledSrtEntries: reconciledEntries,
+      };
+      fs.writeFileSync(outputPath, JSON.stringify(outputData, null, 2));
       console.log('');
       console.log(`Full output saved to: ${outputPath}`);
+
+      // Save speaker transcript
+      if (reconciledEntries && reconciledEntries.length > 0) {
+        const transcriptPath = outputPath.replace('.json', '.txt');
+        const transcript = formatSpeakerTranscript(reconciledEntries);
+        fs.writeFileSync(transcriptPath, transcript);
+        console.log(`Speaker transcript saved to: ${transcriptPath}`);
+      }
       console.log('');
     } else {
       console.log('  Status: FAILED');

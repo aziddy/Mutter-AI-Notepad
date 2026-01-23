@@ -153,6 +153,7 @@ user-preferences.json
 # Diarization
 scripts/diarization/venv/
 diarization-test-output.json
+diarization-test-output.txt
 
 # Root folder audio files
 /*.wav

@@ -2,10 +2,14 @@
  * Vitest tests for WhisperX speaker diarization
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, test } from 'vitest';
 import path from 'path';
 import fs from 'fs';
-import { findExistingAudioFile, PROJECT_ROOT } from '../setup';
+import {
+  getFixtureAudioFiles,
+  loadFixtureMetadata,
+  PROJECT_ROOT,
+} from '../setup';
 
 // Path to the diarization service
 const DIARIZATION_SERVICE_PATH = path.join(
@@ -69,20 +73,37 @@ function loadDiarizationService(): DiarizationServiceClass {
   return DiarizationService;
 }
 
+// Load fixtures at module level so they're available for test definition
+const testAudioFiles = getFixtureAudioFiles();
+
+// Timeout per fixture (5 minutes each)
+const TIMEOUT_PER_FIXTURE = 300000;
+const TEST_TIMEOUT = TIMEOUT_PER_FIXTURE * Math.max(testAudioFiles.length, 1);
+
+// Cache diarization results: audioPath -> result
+// Populated in beforeAll, used by all tests
+const diarizationResults = new Map<string, DiarizationResult>();
+
 describe('Speaker Diarization', () => {
   let DiarizationService: DiarizationServiceClass;
-  let testAudioFile: string | null;
   let service: InstanceType<DiarizationServiceClass>;
   let environmentReady: boolean;
 
   beforeAll(async () => {
     DiarizationService = loadDiarizationService();
     service = new DiarizationService();
-    testAudioFile = findExistingAudioFile();
 
     const envCheck = await service.checkEnvironment();
     environmentReady = envCheck.ready;
-  });
+
+    // Run diarization ONCE for each fixture and cache results
+    if (environmentReady && testAudioFiles.length > 0) {
+      for (const audioFile of testAudioFiles) {
+        const result = await service.diarize(audioFile);
+        diarizationResults.set(audioFile, result);
+      }
+    }
+  }, TEST_TIMEOUT);
 
   describe('Environment Check', () => {
     it('should have Python script present', () => {
@@ -119,110 +140,123 @@ describe('Speaker Diarization', () => {
   });
 
   describe('Diarization Processing', () => {
-    it.skipIf(!environmentReady || !testAudioFile)(
-      'should process audio file and return result object',
-      async () => {
-        expect(testAudioFile).not.toBeNull();
+    test.skipIf(testAudioFiles.length === 0)(
+      'should process audio files and return result objects',
+      async (ctx) => {
+        if (!environmentReady) ctx.skip();
+        for (const audioFile of testAudioFiles) {
+          const result = diarizationResults.get(audioFile);
 
-        const result = await service.diarize(testAudioFile!);
-
-        expect(result).toBeDefined();
-        expect(typeof result.success).toBe('boolean');
-      },
-      300000 // 5 minute timeout
-    );
-
-    it.skipIf(!environmentReady || !testAudioFile)(
-      'should return text in successful result',
-      async () => {
-        const result = await service.diarize(testAudioFile!);
-
-        if (result.success) {
-          expect(result.text).toBeDefined();
-          expect(typeof result.text).toBe('string');
-          expect(result.text!.length).toBeGreaterThan(0);
+          expect(result).toBeDefined();
+          expect(typeof result!.success).toBe('boolean');
         }
-      },
-      300000
+      }
     );
 
-    it.skipIf(!environmentReady || !testAudioFile)(
+    test.skipIf(testAudioFiles.length === 0)(
+      'should return text in successful results',
+      async (ctx) => {
+        if (!environmentReady) ctx.skip();
+        for (const audioFile of testAudioFiles) {
+          const result = diarizationResults.get(audioFile)!;
+
+          if (result.success) {
+            expect(result.text).toBeDefined();
+            expect(typeof result.text).toBe('string');
+            expect(result.text!.length).toBeGreaterThan(0);
+          }
+        }
+      }
+    );
+
+    test.skipIf(testAudioFiles.length === 0)(
       'should return segments array',
-      async () => {
-        const result = await service.diarize(testAudioFile!);
+      async (ctx) => {
+        if (!environmentReady) ctx.skip();
+        for (const audioFile of testAudioFiles) {
+          const result = diarizationResults.get(audioFile)!;
 
-        if (result.success) {
-          expect(Array.isArray(result.segments)).toBe(true);
-          expect(result.segments!.length).toBeGreaterThan(0);
+          if (result.success) {
+            expect(Array.isArray(result.segments)).toBe(true);
+            expect(result.segments!.length).toBeGreaterThan(0);
+          }
         }
-      },
-      300000
+      }
     );
 
-    it.skipIf(!environmentReady || !testAudioFile)(
+    test.skipIf(testAudioFiles.length === 0)(
       'should have valid segment timestamps',
-      async () => {
-        const result = await service.diarize(testAudioFile!);
+      async (ctx) => {
+        if (!environmentReady) ctx.skip();
+        for (const audioFile of testAudioFiles) {
+          const result = diarizationResults.get(audioFile)!;
 
-        if (result.success && result.segments) {
-          result.segments.forEach((segment) => {
-            expect(typeof segment.start).toBe('number');
-            expect(typeof segment.end).toBe('number');
-            expect(segment.start).toBeGreaterThanOrEqual(0);
-            expect(segment.end).toBeGreaterThan(segment.start);
-            expect(typeof segment.text).toBe('string');
-          });
+          if (result.success && result.segments) {
+            result.segments.forEach((segment) => {
+              expect(typeof segment.start).toBe('number');
+              expect(typeof segment.end).toBe('number');
+              expect(segment.start).toBeGreaterThanOrEqual(0);
+              expect(segment.end).toBeGreaterThan(segment.start);
+              expect(typeof segment.text).toBe('string');
+            });
+          }
         }
-      },
-      300000
+      }
     );
 
-    it.skipIf(!environmentReady || !testAudioFile || !process.env.HF_TOKEN)(
+    test.skipIf(testAudioFiles.length === 0 || !process.env.HF_TOKEN)(
       'should have speaker assignments when HF_TOKEN is set',
-      async () => {
-        const result = await service.diarize(testAudioFile!);
+      async (ctx) => {
+        if (!environmentReady) ctx.skip();
+        for (const audioFile of testAudioFiles) {
+          const result = diarizationResults.get(audioFile)!;
 
-        if (result.success) {
-          const segmentsWithSpeakers = result.segments!.filter((s) => s.speaker);
-          expect(segmentsWithSpeakers.length).toBeGreaterThan(0);
+          if (result.success) {
+            const segmentsWithSpeakers = result.segments!.filter((s) => s.speaker);
+            expect(segmentsWithSpeakers.length).toBeGreaterThan(0);
+          }
         }
-      },
-      300000
+      }
     );
 
-    it.skipIf(!environmentReady || !testAudioFile || !process.env.HF_TOKEN)(
-      'should return unique speakers list',
-      async () => {
-        const result = await service.diarize(testAudioFile!);
+    test.skipIf(testAudioFiles.length === 0 || !process.env.HF_TOKEN)(
+      'should identify correct number of speakers per fixture',
+      async (ctx) => {
+        if (!environmentReady) ctx.skip();
+        for (const audioFile of testAudioFiles) {
+          const metadata = loadFixtureMetadata(audioFile);
+          const result = diarizationResults.get(audioFile)!;
 
-        if (result.success) {
-          expect(Array.isArray(result.speakers)).toBe(true);
-          expect(result.speakers!.length).toBeGreaterThanOrEqual(1);
+          if (result.success) {
+            expect(result.speakers?.length).toBe(metadata.expectedSpeakers);
+          }
         }
-      },
-      300000
+      }
     );
 
-    it.skipIf(!environmentReady || !testAudioFile)(
+    test.skipIf(testAudioFiles.length === 0)(
       'should include metadata in result',
-      async () => {
-        const result = await service.diarize(testAudioFile!);
+      async (ctx) => {
+        if (!environmentReady) ctx.skip();
+        for (const audioFile of testAudioFiles) {
+          const result = diarizationResults.get(audioFile)!;
 
-        if (result.success) {
-          expect(result.metadata).toBeDefined();
-          expect(result.metadata).toHaveProperty('model');
-          expect(result.metadata).toHaveProperty('diarization_enabled');
-          expect(result.metadata).toHaveProperty('device');
+          if (result.success) {
+            expect(result.metadata).toBeDefined();
+            expect(result.metadata).toHaveProperty('model');
+            expect(result.metadata).toHaveProperty('diarization_enabled');
+            expect(result.metadata).toHaveProperty('device');
+          }
         }
-      },
-      300000
+      }
     );
   });
 
   describe('Error Handling', () => {
-    it.skipIf(!environmentReady)(
+    test(
       'should handle non-existent file gracefully',
-      async () => {
+      async (ctx) => {
+        if (!environmentReady) ctx.skip();
         const result = await service.diarize('/nonexistent/path/to/file.wav');
 
         expect(result.success).toBe(false);
@@ -231,9 +265,10 @@ describe('Speaker Diarization', () => {
       }
     );
 
-    it.skipIf(!environmentReady)(
+    test(
       'should handle invalid file format gracefully',
-      async () => {
+      async (ctx) => {
+        if (!environmentReady) ctx.skip();
         // Try to process package.json as audio (will fail)
         const invalidFile = path.join(PROJECT_ROOT, 'package.json');
         const result = await service.diarize(invalidFile);

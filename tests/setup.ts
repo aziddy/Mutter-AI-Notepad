@@ -59,3 +59,36 @@ export function findExistingAudioFile(): string | null {
 export function hasTestAudioFile(): boolean {
   return findExistingAudioFile() !== null;
 }
+
+/**
+ * Metadata for a test fixture audio file.
+ */
+export interface FixtureMetadata {
+  expectedSpeakers: number;
+  description?: string;
+}
+
+/**
+ * Get all audio files from the fixtures directory.
+ * @returns Array of absolute paths to audio files
+ */
+export function getFixtureAudioFiles(): string[] {
+  if (!fs.existsSync(TEST_FIXTURES_DIR)) {
+    return [];
+  }
+
+  const files = fs.readdirSync(TEST_FIXTURES_DIR);
+  return files
+    .filter((f) => /\.(wav|mp3|m4a|webm)$/i.test(f))
+    .map((f) => path.join(TEST_FIXTURES_DIR, f));
+}
+
+/**
+ * Load the metadata JSON for an audio fixture file.
+ * @param audioPath Path to the audio file
+ * @returns The fixture metadata
+ */
+export function loadFixtureMetadata(audioPath: string): FixtureMetadata {
+  const jsonPath = audioPath.replace(/\.(wav|mp3|m4a|webm)$/i, '.json');
+  return JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+}

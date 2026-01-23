@@ -8,7 +8,8 @@ export default defineConfig({
     include: ['tests/**/*.test.ts', 'tests/**/*.test.js'],
     exclude: ['node_modules', 'dist', 'dist-electron'],
     testTimeout: 120000, // 2 minutes for diarization tests
-    hookTimeout: 30000,
+    hookTimeout: 300000, // 5 minutes for beforeAll diarization
+    setupFiles: ['dotenv/config'], // Load .env before tests
   },
   resolve: {
     alias: {

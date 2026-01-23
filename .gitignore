@@ -153,9 +153,6 @@ user-preferences.json
 # Diarization
 scripts/diarization/venv/
 diarization-test-output.json
-tests/diarization/fixtures/*.wav
-tests/diarization/fixtures/*.mp3
-tests/diarization/fixtures/*.m4a
 
 # Root folder audio files
 /*.wav

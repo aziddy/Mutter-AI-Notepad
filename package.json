@@ -10,6 +10,10 @@
         "build": "tsc && vite build",
         "electron:build": "npm run build && electron-builder",
         "dist": "npm run electron:build",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:ui": "vitest --ui",
+        "test:diarization": "node scripts/test-diarization.js",
         "test-local-llm": "node scripts/test-local-llm.js",
         "test-qwen3-dl-links": "node scripts/download-qwen3.js --test",
         "download-qwen3-0.6b-8Bit": "node scripts/download-qwen3.js qwen3-0.6b q8_0",
@@ -24,6 +28,7 @@
     ],
     "author": "Your Name",
     "dependencies": {
+        "dotenv": "^17.2.3",
         "electron": "^28.0.0",
         "ffmpeg-static": "^5.2.0",
         "fluent-ffmpeg": "^2.1.2",
@@ -42,6 +47,7 @@
         "@typescript-eslint/eslint-plugin": "^6.7.0",
         "@typescript-eslint/parser": "^6.7.0",
         "@vitejs/plugin-react": "^4.1.0",
+        "@vitest/ui": "^2.1.0",
         "electron-builder": "^24.9.1",
         "eslint": "^8.50.0",
         "eslint-plugin-react": "^7.33.0",
@@ -49,7 +55,8 @@
         "typescript": "^5.2.0",
         "vite": "^4.4.0",
         "vite-plugin-electron": "^0.14.0",
-        "vite-plugin-electron-renderer": "^0.14.0"
+        "vite-plugin-electron-renderer": "^0.14.0",
+        "vitest": "^2.1.0"
     },
     "build": {
         "appId": "com.mutter.ai.notepad",

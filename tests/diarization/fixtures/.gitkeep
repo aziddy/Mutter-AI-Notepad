@@ -1,0 +1,2 @@
+# Place test audio files here for diarization tests
+# Files in this directory are ignored by git (except this .gitkeep)

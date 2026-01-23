@@ -4,7 +4,7 @@ import { useElectron } from '../../hooks/useElectron';
 
 const FileInfo: React.FC = () => {
   const { state, dispatch } = useAppContext();
-  const { transcribeFile } = useElectron();
+  const { transcribeFile, getTranscriptions } = useElectron();
   const [customName, setCustomName] = useState<string>('');
   const [isTranscribing, setIsTranscribing] = useState(false);
 
@@ -31,7 +31,8 @@ const FileInfo: React.FC = () => {
         payload: {
           transcription: result.transcription,
           jsonData: result.jsonData,
-          srtContent: result.srt || ''
+          srtContent: result.srt || '',
+          transcriptionId: result.fileName
         }
       });
 
@@ -46,8 +47,13 @@ const FileInfo: React.FC = () => {
       // Clear the selected file since transcription is complete
       dispatch({ type: 'HIDE_FILE_INFO' });
 
-      // Refresh transcriptions list
-      // This would typically be done by calling a parent function or using a global state update
+      // Refresh transcriptions list to show the new transcription
+      try {
+        const transcriptions = await getTranscriptions();
+        dispatch({ type: 'SET_TRANSCRIPTIONS', payload: transcriptions });
+      } catch (error) {
+        console.warn('Failed to refresh transcriptions list:', error);
+      }
 
       dispatch({
         type: 'ADD_TOAST',

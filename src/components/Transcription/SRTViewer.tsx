@@ -1,17 +1,21 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect } from 'react';
 import { SRTEntry } from '../../types';
 
 interface SRTViewerProps {
   srtContent: string;
   currentPlayingEntry: SRTEntry | null;
   onEntryClick: (entry: SRTEntry) => void;
+  viewMode?: 'segmented' | 'continuous';
 }
 
 const SRTViewer: React.FC<SRTViewerProps> = ({
   srtContent,
   currentPlayingEntry,
   onEntryClick,
+  viewMode = 'segmented',
 }) => {
+  const continuousContainerRef = useRef<HTMLDivElement>(null);
+  const playingEntryRef = useRef<HTMLSpanElement>(null);
   // Parse SRT content into entries
   const srtEntries = useMemo(() => {
     if (!srtContent) return [];
@@ -57,6 +61,16 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
     onEntryClick(entry);
   }, [onEntryClick]);
 
+  // Auto-scroll to playing entry in continuous view
+  useEffect(() => {
+    if (viewMode === 'continuous' && playingEntryRef.current && continuousContainerRef.current) {
+      playingEntryRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }
+  }, [currentPlayingEntry, viewMode]);
+
   if (srtEntries.length === 0) {
     return (
       <div className="transcription-srt">
@@ -67,13 +81,39 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
     );
   }
 
+  // Render continuous view
+  if (viewMode === 'continuous') {
+    return (
+      <div className="transcription-srt-continuous" ref={continuousContainerRef}>
+        {srtEntries.map((entry, index) => {
+          const isPlaying = currentPlayingEntry &&
+            currentPlayingEntry.startTime === entry.startTime &&
+            currentPlayingEntry.endTime === entry.endTime;
+
+          return (
+            <span
+              key={index}
+              ref={isPlaying ? playingEntryRef : null}
+              className={`srt-continuous-entry ${isPlaying ? 'playing' : ''}`}
+              onClick={() => handleEntryClick(entry)}
+              title={`${formatTime(entry.startTime)} - ${formatTime(entry.endTime)}`}
+            >
+              {entry.text}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Render segmented view (default)
   return (
     <div className="transcription-srt">
       {srtEntries.map((entry, index) => {
-        const isPlaying = currentPlayingEntry && 
-          currentPlayingEntry.startTime === entry.startTime && 
+        const isPlaying = currentPlayingEntry &&
+          currentPlayingEntry.startTime === entry.startTime &&
           currentPlayingEntry.endTime === entry.endTime;
-        
+
         return (
           <div
             key={index}

@@ -74,6 +74,9 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
   // AI panel collapse state
   const [isAIPanelCollapsed, setIsAIPanelCollapsed] = useState(false);
 
+  // SRT view mode state
+  const [srtViewMode, setSrtViewMode] = useState<'segmented' | 'continuous'>('segmented');
+
   // Load user preferences on mount
   useEffect(() => {
     const loadPreferences = async () => {
@@ -265,21 +268,35 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
         </div>
 
         <div className={`tab-content ${state.activeTab === 'srt' ? 'active' : ''}`}>
-          {/* Audio Player */}
-          {state.currentJsonData?.metadata?.audioSourceFile && state.activeTab === 'srt' && (
-            <AudioPlayer
-              ref={audioPlayerRef}
-              audioSource={state.currentJsonData.metadata.audioSourceFile}
-              srtEntries={state.srtEntries}
-              onPlayingEntryChange={handlePlayingEntryChange}
-            />
-          )}
-          
+          {/* Audio Player and View Mode Select */}
+          <div className="srt-controls">
+            {state.currentJsonData?.metadata?.audioSourceFile && state.activeTab === 'srt' && (
+              <AudioPlayer
+                ref={audioPlayerRef}
+                audioSource={state.currentJsonData.metadata.audioSourceFile}
+                srtEntries={state.srtEntries}
+                onPlayingEntryChange={handlePlayingEntryChange}
+              />
+            )}
+            <div className="srt-view-mode-select">
+              <label htmlFor="srt-view-mode">View:</label>
+              <select
+                id="srt-view-mode"
+                value={srtViewMode}
+                onChange={(e) => setSrtViewMode(e.target.value as 'segmented' | 'continuous')}
+              >
+                <option value="segmented">Segmented</option>
+                <option value="continuous">Continuous</option>
+              </select>
+            </div>
+          </div>
+
           {/* SRT Viewer */}
           <SRTViewer
             srtContent={state.srtContent}
             currentPlayingEntry={state.currentPlayingEntry}
             onEntryClick={handleSRTEntryClick}
+            viewMode={srtViewMode}
           />
         </div>
       </div>

@@ -473,6 +473,77 @@ body {
     margin-top: 4px;
 }
 
+/* SRT View Controls */
+.srt-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.srt-view-mode-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: #F9FAFB;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.srt-view-mode-select label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #6B7280;
+}
+
+.srt-view-mode-select select {
+    padding: 6px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 6px;
+    background: white;
+    font-size: 0.85rem;
+    color: #374151;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.srt-view-mode-select select:hover {
+    border-color: #9CA3AF;
+}
+
+.srt-view-mode-select select:focus {
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* SRT Continuous View */
+.transcription-srt-continuous {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    line-height: 1.8;
+    font-size: 1rem;
+    color: #374151;
+}
+
+.srt-continuous-entry {
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    margin-right: 4px;
+}
+
+.srt-continuous-entry:hover {
+    background: #F3F4F6;
+}
+
+.srt-continuous-entry.playing {
+    background: #FEF3C7;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+}
+
 /* Audio Player */
 .audio-player-section {
     padding: 20px;

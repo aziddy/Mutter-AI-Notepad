@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const { transcribeAudio } = require('./transcription');
 const {
   generateSummary,
@@ -22,6 +23,12 @@ const {
 } = require('./llm');
 
 let mainWindow;
+
+// Register custom protocol for serving local audio files
+// This must be called before app.whenReady()
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'local-audio', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true } }
+]);
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -54,7 +61,65 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  // Register protocol handler to serve local audio files
+  protocol.handle('local-audio', (request) => {
+    const filePath = decodeURIComponent(request.url.replace('local-audio://', ''));
+
+    try {
+      const stat = fsSync.statSync(filePath);
+      const fileSize = stat.size;
+
+      // Determine content type based on file extension
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes = {
+        '.wav': 'audio/wav',
+        '.mp3': 'audio/mpeg',
+        '.m4a': 'audio/mp4',
+        '.ogg': 'audio/ogg',
+        '.flac': 'audio/flac'
+      };
+      const contentType = mimeTypes[ext] || 'audio/wav';
+
+      // Handle range requests for seeking support
+      const rangeHeader = request.headers.get('range');
+
+      if (rangeHeader) {
+        const parts = rangeHeader.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunkSize = end - start + 1;
+
+        const stream = fsSync.createReadStream(filePath, { start, end });
+
+        return new Response(stream, {
+          status: 206,
+          headers: {
+            'Content-Type': contentType,
+            'Content-Length': chunkSize.toString(),
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes'
+          }
+        });
+      }
+
+      // Full file request
+      const stream = fsSync.createReadStream(filePath);
+      return new Response(stream, {
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': fileSize.toString(),
+          'Accept-Ranges': 'bytes'
+        }
+      });
+    } catch (error) {
+      console.error('Error serving audio file:', error);
+      return new Response('File not found', { status: 404 });
+    }
+  });
+
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   app.quit();

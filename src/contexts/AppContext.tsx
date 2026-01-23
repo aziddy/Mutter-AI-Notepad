@@ -217,7 +217,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
             ? {
                 ...transcription,
                 aiState: {
-                  hasContext: false,
                   aiResults: { title: '', content: '', visible: false },
                   ...transcription.aiState,
                   hasContext: action.payload.hasContext,
@@ -236,8 +235,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
             ? {
                 ...transcription,
                 aiState: {
-                  hasContext: false,
-                  aiResults: { title: '', content: '', visible: false },
+                  hasContext: transcription.aiState?.hasContext ?? false,
                   ...transcription.aiState,
                   aiResults: {
                     title: action.payload.title,

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { AudioPlayerState, SRTEntry } from '../../types';
 
 interface AudioPlayerProps {
@@ -8,12 +8,16 @@ interface AudioPlayerProps {
   onPlayingEntryChange?: (entry: SRTEntry | null) => void;
 }
 
-const AudioPlayer: React.FC<AudioPlayerProps> = ({
+export interface AudioPlayerRef {
+  seekTo: (time: number) => void;
+}
+
+const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({
   audioSource,
   srtEntries,
   onCurrentTimeChange,
   onPlayingEntryChange,
-}) => {
+}, ref) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playerState, setPlayerState] = useState<AudioPlayerState>({
     isPlaying: false,
@@ -27,9 +31,14 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   // Format time display
   const formatTime = useCallback((seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
     const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+    return `00:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }, []);
 
   // Update current time and sync with SRT entries
@@ -159,16 +168,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, [audioSource, playerState.isLoaded, playerState.currentTime, playerState.duration, togglePlayPause, seekTo]);
 
-  // Jump to SRT entry time
-  const jumpToEntry = useCallback((entry: SRTEntry) => {
-    seekTo(entry.startTime);
-  }, [seekTo]);
-
-  // Expose jumpToEntry function
-  useEffect(() => {
-    // Store reference for parent components to access
-    (audioRef.current as any)?.jumpToEntry && ((audioRef.current as any).jumpToEntry = jumpToEntry);
-  }, [jumpToEntry]);
+  // Expose seekTo to parent components via ref
+  useImperativeHandle(ref, () => ({
+    seekTo,
+  }), [seekTo]);
 
   if (!audioSource) {
     return null;
@@ -181,7 +184,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       <div className="audio-player">
         <audio
           ref={audioRef}
-          src={`file://${audioSource}`}
+          src={`local-audio://${audioSource}`}
           preload="metadata"
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
@@ -254,6 +257,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default AudioPlayer;

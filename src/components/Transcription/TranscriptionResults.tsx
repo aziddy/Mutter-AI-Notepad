@@ -1,12 +1,41 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { useAppContext, getCurrentTranscriptionAIState } from '../../contexts/AppContext';
 import { useElectron } from '../../hooks/useElectron';
-import AudioPlayer from '../Audio/AudioPlayer';
+import AudioPlayer, { AudioPlayerRef } from '../Audio/AudioPlayer';
 import SRTViewer from './SRTViewer';
 import LocalAISection from '../AI/LocalAISection';
 import APISection from '../AI/APISection';
 import AIResults from '../AI/AIResults';
 import { SRTEntry } from '../../types';
+
+// Parse SRT content into structured entries
+const parseSRTContent = (srtContent: string): SRTEntry[] => {
+  if (!srtContent) return [];
+
+  const entries: SRTEntry[] = [];
+  const blocks = srtContent.trim().split('\n\n');
+
+  for (const block of blocks) {
+    const lines = block.split('\n').filter(line => line.trim());
+    if (lines.length < 3) continue;
+
+    // Skip the sequence number (first line)
+    const timeLine = lines[1];
+    const textLines = lines.slice(2);
+
+    // Parse time line (format: "00:00:00,000 --> 00:00:00,000")
+    const timeMatch = timeLine.match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+    if (!timeMatch) continue;
+
+    const startTime = parseFloat(timeMatch[1]) * 3600 + parseFloat(timeMatch[2]) * 60 + parseFloat(timeMatch[3]) + parseFloat(timeMatch[4]) / 1000;
+    const endTime = parseFloat(timeMatch[5]) * 3600 + parseFloat(timeMatch[6]) * 60 + parseFloat(timeMatch[7]) + parseFloat(timeMatch[8]) / 1000;
+    const text = textLines.join(' ').trim();
+
+    entries.push({ startTime, endTime, text });
+  }
+
+  return entries;
+};
 
 interface TranscriptionResultsProps {
   onSettingsClick?: () => void;
@@ -15,6 +44,19 @@ interface TranscriptionResultsProps {
 const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsClick }) => {
   const { state, dispatch } = useAppContext();
   const { getUserPreferences, updateUserPreferences } = useElectron();
+
+  // Ref for AudioPlayer to enable seeking from SRT entry clicks
+  const audioPlayerRef = useRef<AudioPlayerRef>(null);
+
+  // Parse SRT content and populate state when it changes
+  useEffect(() => {
+    if (state.srtContent) {
+      const entries = parseSRTContent(state.srtContent);
+      dispatch({ type: 'SET_SRT_ENTRIES', payload: entries });
+    } else {
+      dispatch({ type: 'SET_SRT_ENTRIES', payload: [] });
+    }
+  }, [state.srtContent, dispatch]);
 
   // AI Results state - using local streaming state, but persistent results come from context
   const [streamingResult, setStreamingResult] = useState<{
@@ -94,8 +136,7 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
 
   // Handle SRT entry click (jump to time in audio)
   const handleSRTEntryClick = useCallback((entry: SRTEntry) => {
-    // This will be handled by the AudioPlayer component
-    console.log('Jump to SRT entry:', entry);
+    audioPlayerRef.current?.seekTo(entry.startTime);
   }, []);
 
   // Handle current playing entry change
@@ -227,6 +268,7 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
           {/* Audio Player */}
           {state.currentJsonData?.metadata?.audioSourceFile && state.activeTab === 'srt' && (
             <AudioPlayer
+              ref={audioPlayerRef}
               audioSource={state.currentJsonData.metadata.audioSourceFile}
               srtEntries={state.srtEntries}
               onPlayingEntryChange={handlePlayingEntryChange}

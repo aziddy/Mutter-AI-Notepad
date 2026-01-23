@@ -34,10 +34,17 @@ echo ""
 echo "Upgrading pip..."
 pip install --upgrade pip
 
-# Install PyTorch (CPU version for testing)
+# Install PyTorch (platform-aware)
 echo ""
-echo "Installing PyTorch (CPU version)..."
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    # macOS - use default PyTorch which includes MPS support for Apple Silicon
+    echo "Installing PyTorch with MPS support (macOS)..."
+    pip install torch torchaudio
+else
+    # Linux/Windows - use CPU version (user can reinstall with CUDA if needed)
+    echo "Installing PyTorch (CPU version)..."
+    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+fi
 
 # Install WhisperX
 echo ""

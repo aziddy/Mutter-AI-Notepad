@@ -3,12 +3,17 @@
  * Manual test script for speaker diarization
  *
  * Usage:
- *   npm run test:diarization
+ *   npm run test:diarization -- /path/to/audio.wav
  *   node scripts/test-diarization.js [audio_file]
  *
  * Environment:
  *   HF_TOKEN - Hugging Face token for diarization (required for speaker labels)
  *   Can be set in .env file at project root
+ *
+ * Options:
+ *   --whisperx  Use WhisperX mode (CPU only) instead of default hybrid mode
+ *
+ * Default mode is HYBRID (whisper.cpp GPU + pyannote CPU) - faster on Mac
  */
 
 // Load .env file from project root
@@ -17,6 +22,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const path = require('path');
 const fs = require('fs');
 const { DiarizationService } = require('./diarization/diarization-service');
+const { HybridDiarizationService } = require('./diarization/hybrid-diarization-service');
 const { reconcileSpeakersFromSRT } = require('../src/utils/reconcile-speakers');
 const { formatSpeakerTranscript } = require('../src/utils/format-speaker-transcript');
 
@@ -130,15 +136,20 @@ function formatDuration(seconds) {
 /**
  * Run the diarization test.
  * @param {string|null} audioFile
+ * @param {boolean} useHybrid - Use hybrid mode (whisper.cpp GPU + pyannote CPU)
  */
-async function runTests(audioFile) {
+async function runTests(audioFile, useHybrid = false) {
   console.log('');
   console.log('='.repeat(60));
   console.log('  Speaker Diarization Test');
   console.log('='.repeat(60));
   console.log('');
 
-  const service = new DiarizationService();
+  const mode = useHybrid ? 'HYBRID (whisper.cpp GPU + pyannote CPU)' : 'WhisperX (CPU)';
+  console.log(`  Mode: ${mode}`);
+  console.log('');
+
+  const service = useHybrid ? new HybridDiarizationService() : new DiarizationService();
 
   // Step 1: Check environment
   console.log('[1/3] Checking environment...');
@@ -371,7 +382,9 @@ async function runTests(audioFile) {
 }
 
 // Parse command line args
-const audioFile = process.argv[2] || null;
+const args = process.argv.slice(2);
+const useWhisperX = args.includes('--whisperx'); // Use --whisperx to force old CPU-only mode
+const audioFile = args.find((arg) => !arg.startsWith('--')) || null;
 
-// Run
-runTests(audioFile);
+// Run (hybrid mode is default)
+runTests(audioFile, !useWhisperX);

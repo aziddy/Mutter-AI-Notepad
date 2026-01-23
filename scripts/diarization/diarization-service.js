@@ -55,8 +55,20 @@ class DiarizationService {
     this.venvPython = path.join(this.scriptDir, 'venv', 'bin', 'python');
     this.hfToken = options.hfToken || process.env.HF_TOKEN;
     this.model = options.model || 'large-v2';
-    this.device = options.device || 'cpu';
+    this.device = options.device || this.detectDevice();
     this.computeType = options.computeType || 'int8';
+  }
+
+  /**
+   * Detect the best available device for processing.
+   * Note: WhisperX uses faster-whisper (CTranslate2) which only supports 'cpu' and 'cuda'.
+   * MPS (Metal) is NOT supported by the underlying library.
+   * @returns {string} Device identifier: 'cuda' if available, 'cpu' otherwise
+   */
+  detectDevice() {
+    // WhisperX/faster-whisper/CTranslate2 only supports 'cpu' and 'cuda'
+    // MPS is not supported - returns 'unsupported device mps' error
+    return 'cpu';
   }
 
   /**

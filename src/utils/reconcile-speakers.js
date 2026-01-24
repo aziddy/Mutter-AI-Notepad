@@ -108,6 +108,48 @@ function extractAllWords(diarizationResult) {
 }
 
 /**
+ * Find the dominant speaker for a time range based on segment-level data.
+ * Used when word-level data is not available (e.g., hybrid whisper.cpp + pyannote pipeline).
+ * @param {number} startTime
+ * @param {number} endTime
+ * @param {DiarizationSegment[]} segments
+ * @returns {{ speaker: string|null, confidence: number }}
+ */
+function findDominantSpeakerFromSegments(startTime, endTime, segments) {
+  const speakerDurations = {};
+  let totalOverlap = 0;
+
+  for (const segment of segments) {
+    if (!segment.speaker) continue;
+
+    const overlap = calculateOverlap(startTime, endTime, segment.start, segment.end);
+    if (overlap > 0) {
+      speakerDurations[segment.speaker] =
+        (speakerDurations[segment.speaker] || 0) + overlap;
+      totalOverlap += overlap;
+    }
+  }
+
+  if (totalOverlap === 0) {
+    return { speaker: null, confidence: 0 };
+  }
+
+  // Find speaker with maximum duration
+  let maxDuration = 0;
+  let dominantSpeaker = null;
+
+  for (const [speaker, duration] of Object.entries(speakerDurations)) {
+    if (duration > maxDuration) {
+      maxDuration = duration;
+      dominantSpeaker = speaker;
+    }
+  }
+
+  const confidence = maxDuration / totalOverlap;
+  return { speaker: dominantSpeaker, confidence };
+}
+
+/**
  * Calculate overlap between two time ranges.
  * @param {number} start1
  * @param {number} end1
@@ -180,13 +222,26 @@ function reconcileSpeakers(srtEntries, diarizationResult) {
   }
 
   const allWords = extractAllWords(diarizationResult);
+  const hasWordLevelData = allWords.length > 0;
 
   return srtEntries.map((entry) => {
-    const { speaker, confidence } = findDominantSpeaker(
-      entry.startTime,
-      entry.endTime,
-      allWords
-    );
+    let speaker, confidence;
+
+    if (hasWordLevelData) {
+      // Use word-level data (WhisperX pipeline)
+      ({ speaker, confidence } = findDominantSpeaker(
+        entry.startTime,
+        entry.endTime,
+        allWords
+      ));
+    } else {
+      // Fall back to segment-level data (hybrid whisper.cpp + pyannote pipeline)
+      ({ speaker, confidence } = findDominantSpeakerFromSegments(
+        entry.startTime,
+        entry.endTime,
+        diarizationResult.segments
+      ));
+    }
 
     return {
       ...entry,
@@ -214,5 +269,6 @@ module.exports = {
   reconcileSpeakersFromSRT,
   extractAllWords,
   findDominantSpeaker,
+  findDominantSpeakerFromSegments,
   calculateOverlap,
 };

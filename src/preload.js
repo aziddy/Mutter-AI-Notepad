@@ -129,5 +129,45 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // User preferences APIs
   getUserPreferences: () => ipcRenderer.invoke('get-user-preferences'),
-  updateUserPreferences: (preferences) => ipcRenderer.invoke('update-user-preferences', preferences)
+  updateUserPreferences: (preferences) => ipcRenderer.invoke('update-user-preferences', preferences),
+
+  // Diarization APIs
+  checkDiarizationEnvironment: (backend) => ipcRenderer.invoke('check-diarization-environment', backend),
+  getDiarizationConfig: () => ipcRenderer.invoke('get-diarization-config'),
+  updateDiarizationConfig: (config) => ipcRenderer.invoke('update-diarization-config', config),
+
+  transcribeFileWithDiarization: (filePath, customName, onProgress, onComplete, onError) => {
+    const streamId = Math.random().toString(36).substring(7);
+
+    // Set up listeners
+    ipcRenderer.on(`diarization-progress-${streamId}`, (event, message) => {
+      onProgress(message);
+    });
+
+    ipcRenderer.on(`diarization-complete-${streamId}`, (event, result) => {
+      // Clean up listeners
+      ipcRenderer.removeAllListeners(`diarization-progress-${streamId}`);
+      ipcRenderer.removeAllListeners(`diarization-complete-${streamId}`);
+      ipcRenderer.removeAllListeners(`diarization-error-${streamId}`);
+      onComplete(result);
+    });
+
+    ipcRenderer.on(`diarization-error-${streamId}`, (event, error) => {
+      // Clean up listeners
+      ipcRenderer.removeAllListeners(`diarization-progress-${streamId}`);
+      ipcRenderer.removeAllListeners(`diarization-complete-${streamId}`);
+      ipcRenderer.removeAllListeners(`diarization-error-${streamId}`);
+      onError(error);
+    });
+
+    // Start the diarization
+    ipcRenderer.invoke('transcribe-file-with-diarization', filePath, customName, streamId);
+
+    // Return cleanup function
+    return () => {
+      ipcRenderer.removeAllListeners(`diarization-progress-${streamId}`);
+      ipcRenderer.removeAllListeners(`diarization-complete-${streamId}`);
+      ipcRenderer.removeAllListeners(`diarization-error-${streamId}`);
+    };
+  }
 }); 

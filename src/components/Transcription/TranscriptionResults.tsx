@@ -238,6 +238,12 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
                 <span>Audio: {state.currentJsonData.metadata.audioSourceFile.split(/[\\/]/).pop()}</span>
               </div>
             )}
+            {state.currentJsonData.speakers && state.currentJsonData.speakers.length > 0 && (
+              <div className="metadata-item">
+                <i className="fas fa-users"></i>
+                <span>Speakers: {state.currentJsonData.speakers.length}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -297,6 +303,7 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
             currentPlayingEntry={state.currentPlayingEntry}
             onEntryClick={handleSRTEntryClick}
             viewMode={srtViewMode}
+            speakerSegments={state.currentJsonData?.speakerSegments}
           />
         </div>
       </div>

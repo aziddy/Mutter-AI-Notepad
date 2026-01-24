@@ -1,11 +1,24 @@
 import React, { useCallback, useMemo, useRef, useEffect } from 'react';
-import { SRTEntry } from '../../types';
+import { SRTEntry, SpeakerSegment } from '../../types';
+
+// Speaker color palette
+const SPEAKER_COLORS = [
+  '#3B82F6', // Blue
+  '#10B981', // Green
+  '#F59E0B', // Amber
+  '#EF4444', // Red
+  '#8B5CF6', // Purple
+  '#EC4899', // Pink
+  '#06B6D4', // Cyan
+  '#F97316', // Orange
+];
 
 interface SRTViewerProps {
   srtContent: string;
   currentPlayingEntry: SRTEntry | null;
   onEntryClick: (entry: SRTEntry) => void;
   viewMode?: 'segmented' | 'continuous';
+  speakerSegments?: SpeakerSegment[];
 }
 
 const SRTViewer: React.FC<SRTViewerProps> = ({
@@ -13,9 +26,44 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
   currentPlayingEntry,
   onEntryClick,
   viewMode = 'segmented',
+  speakerSegments,
 }) => {
   const continuousContainerRef = useRef<HTMLDivElement>(null);
   const playingEntryRef = useRef<HTMLSpanElement>(null);
+
+  // Generate speaker color map
+  const speakerColors = useMemo(() => {
+    if (!speakerSegments || speakerSegments.length === 0) return {};
+    const uniqueSpeakers = [...new Set(speakerSegments.map(s => s.speaker).filter(Boolean))];
+    const colorMap: Record<string, string> = {};
+    uniqueSpeakers.forEach((speaker, index) => {
+      colorMap[speaker] = SPEAKER_COLORS[index % SPEAKER_COLORS.length];
+    });
+    return colorMap;
+  }, [speakerSegments]);
+
+  // Find speaker for a given time range
+  const findSpeakerForEntry = useCallback((startTime: number, endTime: number): { speaker: string | null; color: string | null } => {
+    if (!speakerSegments || speakerSegments.length === 0) {
+      return { speaker: null, color: null };
+    }
+    // Find the segment with the most overlap
+    let bestMatch: SpeakerSegment | null = null;
+    let maxOverlap = 0;
+    for (const segment of speakerSegments) {
+      const overlapStart = Math.max(startTime, segment.start);
+      const overlapEnd = Math.min(endTime, segment.end);
+      const overlap = Math.max(0, overlapEnd - overlapStart);
+      if (overlap > maxOverlap) {
+        maxOverlap = overlap;
+        bestMatch = segment;
+      }
+    }
+    if (bestMatch && bestMatch.speaker) {
+      return { speaker: bestMatch.speaker, color: speakerColors[bestMatch.speaker] || null };
+    }
+    return { speaker: null, color: null };
+  }, [speakerSegments, speakerColors]);
   // Parse SRT content into entries
   const srtEntries = useMemo(() => {
     if (!srtContent) return [];
@@ -89,6 +137,7 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
           const isPlaying = currentPlayingEntry &&
             currentPlayingEntry.startTime === entry.startTime &&
             currentPlayingEntry.endTime === entry.endTime;
+          const { speaker, color } = findSpeakerForEntry(entry.startTime, entry.endTime);
 
           return (
             <span
@@ -96,7 +145,8 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
               ref={isPlaying ? playingEntryRef : null}
               className={`srt-continuous-entry ${isPlaying ? 'playing' : ''}`}
               onClick={() => handleEntryClick(entry)}
-              title={`${formatTime(entry.startTime)} - ${formatTime(entry.endTime)}`}
+              title={`${formatTime(entry.startTime)} - ${formatTime(entry.endTime)}${speaker ? ` (${speaker})` : ''}`}
+              style={color ? { borderLeft: `3px solid ${color}`, paddingLeft: '8px', marginLeft: '4px' } : undefined}
             >
               {entry.text}
             </span>
@@ -113,6 +163,7 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
         const isPlaying = currentPlayingEntry &&
           currentPlayingEntry.startTime === entry.startTime &&
           currentPlayingEntry.endTime === entry.endTime;
+        const { speaker, color } = findSpeakerForEntry(entry.startTime, entry.endTime);
 
         return (
           <div
@@ -121,6 +172,14 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
             onClick={() => handleEntryClick(entry)}
           >
             <div className="srt-entry-header">
+              {speaker && color && (
+                <span
+                  className="srt-speaker-label"
+                  style={{ backgroundColor: color }}
+                >
+                  {speaker}
+                </span>
+              )}
               <span className="srt-entry-number">#{index + 1}</span>
               <span className="srt-entry-time">
                 {formatTime(entry.startTime)} - {formatTime(entry.endTime)}

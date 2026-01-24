@@ -25,7 +25,9 @@ export default defineConfig({
               input: {
                 main: 'src/main.js',
                 transcription: 'src/transcription.js',
-                llm: 'src/llm.js'
+                llm: 'src/llm.js',
+                'diarization-config': 'src/diarization-config.js',
+                'utils/format-speaker-transcript': 'src/utils/format-speaker-transcript.js'
               },
               output: {
                 format: 'cjs',

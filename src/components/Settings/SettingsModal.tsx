@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { useElectron } from '../../hooks/useElectron';
-import { LLMConfig, AIModel } from '../../types';
+import { LLMConfig, AIModel, DiarizationConfig, DiarizationEnvironmentCheck } from '../../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -16,7 +16,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onConfig
     updateLLMConfiguration,
     getAvailableModels,
     getExternalAPIModels,
-    testLLMConnection
+    testLLMConnection,
+    getDiarizationConfig,
+    updateDiarizationConfig,
+    checkDiarizationEnvironment
   } = useElectron();
 
   // State
@@ -30,13 +33,61 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onConfig
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [modelQueryResult, setModelQueryResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // Diarization state
+  const [diarizationConfig, setDiarizationConfig] = useState<DiarizationConfig | null>(null);
+  const [diarizationEnvCheck, setDiarizationEnvCheck] = useState<DiarizationEnvironmentCheck | null>(null);
+  const [isCheckingDiarizationEnv, setIsCheckingDiarizationEnv] = useState(false);
+
   // Load initial data
   useEffect(() => {
     if (isOpen) {
       loadSettings();
       loadModels();
+      loadDiarizationSettings();
     }
   }, [isOpen]);
+
+  const loadDiarizationSettings = async () => {
+    try {
+      const config = await getDiarizationConfig();
+      setDiarizationConfig(config);
+      // Check environment for current backend
+      const envCheck = await checkDiarizationEnvironment(config.backend);
+      setDiarizationEnvCheck(envCheck);
+    } catch (error) {
+      console.warn('Failed to load diarization settings:', error);
+    }
+  };
+
+  const handleDiarizationBackendChange = async (backend: 'fluidaudio' | 'pyannote') => {
+    setDiarizationConfig(prev => prev ? { ...prev, backend } : { enabled: false, backend, hfToken: '' });
+    setIsCheckingDiarizationEnv(true);
+    try {
+      const envCheck = await checkDiarizationEnvironment(backend);
+      setDiarizationEnvCheck(envCheck);
+    } catch (error) {
+      setDiarizationEnvCheck({ ready: false, message: `Error: ${error}`, details: { backend, whisperReady: false } });
+    } finally {
+      setIsCheckingDiarizationEnv(false);
+    }
+  };
+
+  const handleDiarizationHfTokenChange = (hfToken: string) => {
+    setDiarizationConfig(prev => prev ? { ...prev, hfToken } : { enabled: false, backend: 'fluidaudio', hfToken });
+  };
+
+  const handleCheckDiarizationEnvironment = async () => {
+    if (!diarizationConfig) return;
+    setIsCheckingDiarizationEnv(true);
+    try {
+      const envCheck = await checkDiarizationEnvironment(diarizationConfig.backend);
+      setDiarizationEnvCheck(envCheck);
+    } catch (error) {
+      setDiarizationEnvCheck({ ready: false, message: `Error: ${error}`, details: { backend: diarizationConfig.backend, whisperReady: false } });
+    } finally {
+      setIsCheckingDiarizationEnv(false);
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -141,6 +192,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onConfig
     try {
       const result = (await updateLLMConfiguration(formData)) as any;
 
+      // Also save diarization config
+      if (diarizationConfig) {
+        await updateDiarizationConfig(diarizationConfig);
+      }
+
       if (result && result.success) {
         dispatch({
           type: 'ADD_TOAST',
@@ -176,7 +232,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onConfig
     } finally {
       setIsLoading(false);
     }
-  }, [formData, updateLLMConfiguration, dispatch, onClose]);
+  }, [formData, diarizationConfig, updateLLMConfiguration, updateDiarizationConfig, dispatch, onClose]);
 
   // Reset to defaults
   const handleReset = useCallback(() => {
@@ -429,6 +485,85 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onConfig
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Diarization Settings Section */}
+          <div className="settings-section">
+            <div className="section-header">
+              <h3>Speaker Diarization</h3>
+              <p>Configure speaker identification for transcriptions</p>
+            </div>
+
+            <div className="diarization-settings">
+              <div className="config-field">
+                <label htmlFor="diarizationBackend">Diarization Backend</label>
+                <div className="select-wrapper">
+                  <select
+                    id="diarizationBackend"
+                    value={diarizationConfig?.backend || 'fluidaudio'}
+                    onChange={(e) => handleDiarizationBackendChange(e.target.value as 'fluidaudio' | 'pyannote')}
+                    className="modern-select"
+                  >
+                    <option value="fluidaudio">FluidAudio (Fast, macOS only)</option>
+                    <option value="pyannote">Pyannote (Accurate, needs HF token)</option>
+                  </select>
+                  <i className="fas fa-chevron-down select-arrow"></i>
+                </div>
+              </div>
+
+              {diarizationConfig?.backend === 'pyannote' && (
+                <div className="config-field">
+                  <label htmlFor="hfToken">Hugging Face Token</label>
+                  <div className="input-wrapper">
+                    <input
+                      type="password"
+                      id="hfToken"
+                      value={diarizationConfig?.hfToken || ''}
+                      onChange={(e) => handleDiarizationHfTokenChange(e.target.value)}
+                      placeholder="hf_..."
+                      className="modern-input"
+                    />
+                    <i className="fas fa-key input-icon"></i>
+                  </div>
+                  <span className="field-hint">Required for pyannote.audio models</span>
+                </div>
+              )}
+
+              <div className="connection-test">
+                <button
+                  className="btn btn-outline test-btn"
+                  onClick={handleCheckDiarizationEnvironment}
+                  disabled={isCheckingDiarizationEnv}
+                >
+                  <i className={`fas ${isCheckingDiarizationEnv ? 'fa-spinner fa-spin' : 'fa-check-circle'}`}></i>
+                  {isCheckingDiarizationEnv ? 'Checking...' : 'Check Environment'}
+                </button>
+
+                {diarizationEnvCheck && (
+                  <div className={`test-result ${diarizationEnvCheck.ready ? 'success' : 'error'}`}>
+                    <i className={`fas ${diarizationEnvCheck.ready ? 'fa-check-circle' : 'fa-times-circle'}`}></i>
+                    <span>{diarizationEnvCheck.message}</span>
+                  </div>
+                )}
+              </div>
+
+              {diarizationEnvCheck && !diarizationEnvCheck.ready && (
+                <div className="setup-instructions">
+                  {diarizationConfig?.backend === 'fluidaudio' ? (
+                    <div className="instruction-box">
+                      <p><strong>FluidAudio Setup (macOS only):</strong></p>
+                      <code>cd scripts/diarization && bash setup-fluidaudio.sh</code>
+                    </div>
+                  ) : (
+                    <div className="instruction-box">
+                      <p><strong>Pyannote Setup:</strong></p>
+                      <code>cd scripts/diarization && bash setup-pyannote.sh</code>
+                      <p className="mt-2">Then add your Hugging Face token above.</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

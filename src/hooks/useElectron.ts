@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { TranscriptionData, LLMStatus, LLMConfig, AIModel, UserPreferences } from '../types';
+import { TranscriptionData, LLMStatus, LLMConfig, AIModel, UserPreferences, DiarizationConfig, DiarizationEnvironmentCheck, TranscriptionJsonData } from '../types';
 
 export const useElectron = () => {
   // File operations
@@ -142,6 +142,52 @@ export const useElectron = () => {
     return await window.electronAPI.updateUserPreferences(preferences);
   }, []);
 
+  // Diarization operations
+  const checkDiarizationEnvironment = useCallback(async (backend: string): Promise<DiarizationEnvironmentCheck> => {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return await window.electronAPI.checkDiarizationEnvironment(backend);
+  }, []);
+
+  const getDiarizationConfig = useCallback(async (): Promise<DiarizationConfig> => {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return await window.electronAPI.getDiarizationConfig();
+  }, []);
+
+  const updateDiarizationConfig = useCallback(async (config: Partial<DiarizationConfig>) => {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return await window.electronAPI.updateDiarizationConfig(config);
+  }, []);
+
+  const transcribeFileWithDiarization = useCallback((
+    filePath: string,
+    customName: string | undefined,
+    onProgress: (message: string) => void,
+    onComplete: (result: {
+      transcription: string;
+      jsonData: TranscriptionJsonData;
+      srt: string;
+      savedPath: string;
+      jsonPath: string;
+      srtPath: string | null;
+      fileName: string;
+      jsonFileName: string;
+      srtFileName: string;
+      folderPath: string;
+    }) => void,
+    onError: (error: string) => void
+  ) => {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return window.electronAPI.transcribeFileWithDiarization(filePath, customName, onProgress, onComplete, onError);
+  }, []);
+
   return {
     // File operations
     selectFile,
@@ -169,5 +215,11 @@ export const useElectron = () => {
     // User preferences
     getUserPreferences,
     updateUserPreferences,
+
+    // Diarization operations
+    checkDiarizationEnvironment,
+    getDiarizationConfig,
+    updateDiarizationConfig,
+    transcribeFileWithDiarization,
   };
 };

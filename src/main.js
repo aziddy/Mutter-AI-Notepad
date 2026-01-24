@@ -3,6 +3,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const { transcribeAudio } = require('./transcription');
+const { DiarizationConfigService } = require('./diarization-config');
+const { DiarizationService } = require('../scripts/diarization/diarization-service');
+const { formatSpeakerTranscript } = require('./utils/format-speaker-transcript');
 const {
   generateSummary,
   askQuestion,
@@ -495,4 +498,202 @@ ipcMain.handle('update-transcription-name', async (event, folderName, newName) =
     console.error('Error updating transcription name:', error);
     throw new Error(`Failed to update transcription name: ${error.message}`);
   }
-}); 
+});
+
+// Diarization Configuration Service
+const diarizationConfigService = new DiarizationConfigService();
+
+// Diarization IPC Handlers
+ipcMain.handle('check-diarization-environment', async (event, backend = 'fluidaudio') => {
+  try {
+    const config = diarizationConfigService.getConfig();
+    const service = new DiarizationService({
+      backend: backend || config.backend,
+      hfToken: config.hfToken
+    });
+    return await service.checkEnvironment();
+  } catch (error) {
+    return {
+      ready: false,
+      message: `Failed to check environment: ${error.message}`,
+      details: { backend, error: error.message }
+    };
+  }
+});
+
+ipcMain.handle('get-diarization-config', async () => {
+  return diarizationConfigService.getConfig();
+});
+
+ipcMain.handle('update-diarization-config', async (event, config) => {
+  return diarizationConfigService.updateConfig(config);
+});
+
+ipcMain.handle('transcribe-file-with-diarization', async (event, filePath, customName, streamId) => {
+  console.log('transcribe-file-with-diarization:', filePath, 'custom name:', customName);
+
+  try {
+    const config = diarizationConfigService.getConfig();
+
+    // Create transcription folder
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const baseFileName = `transcription-${timestamp}`;
+    const saveDir = path.join(process.cwd(), 'transcriptions');
+    await fs.mkdir(saveDir, { recursive: true });
+    const transcriptionFolder = path.join(saveDir, baseFileName);
+    await fs.mkdir(transcriptionFolder, { recursive: true });
+
+    // Send progress updates
+    const sendProgress = (message) => {
+      event.sender.send(`diarization-progress-${streamId}`, message);
+    };
+
+    sendProgress('Initializing diarization service...');
+
+    // Create diarization service
+    const diarizationService = new DiarizationService({
+      backend: config.backend,
+      hfToken: config.hfToken
+    });
+
+    // Check environment
+    const envCheck = await diarizationService.checkEnvironment();
+    if (!envCheck.ready) {
+      throw new Error(`Diarization environment not ready: ${envCheck.message}`);
+    }
+
+    sendProgress(`Running transcription with ${config.backend} diarization...`);
+
+    // Run diarization (this runs whisper + diarization + alignment)
+    const result = await diarizationService.diarize(filePath, {
+      onProgress: sendProgress
+    });
+
+    if (!result.success) {
+      throw new Error(result.message || 'Diarization failed');
+    }
+
+    sendProgress('Saving results...');
+
+    // Save transcription files
+    const textFileName = `${baseFileName}.txt`;
+    const jsonFileName = `${baseFileName}.json`;
+    const srtFileName = `${baseFileName}.srt`;
+
+    // Save text file
+    const textPath = path.join(transcriptionFolder, textFileName);
+    await fs.writeFile(textPath, result.text);
+
+    // Generate SRT content from aligned segments
+    let srtContent = '';
+    result.segments.forEach((segment, index) => {
+      const startTime = formatSRTTime(segment.start);
+      const endTime = formatSRTTime(segment.end);
+      const speakerPrefix = segment.speaker ? `[${segment.speaker}] ` : '';
+      srtContent += `${index + 1}\n${startTime} --> ${endTime}\n${speakerPrefix}${segment.text}\n\n`;
+    });
+
+    // Save SRT file
+    const srtPath = path.join(transcriptionFolder, srtFileName);
+    await fs.writeFile(srtPath, srtContent);
+
+    // Generate and save formatted speaker transcript (like diarization-test-output.txt)
+    const speakerTranscriptFileName = `${baseFileName}-speakers.txt`;
+    const speakerTranscriptPath = path.join(transcriptionFolder, speakerTranscriptFileName);
+    const speakerTranscriptContent = formatSpeakerTranscript(result.segments.map(seg => ({
+      startTime: seg.start,
+      endTime: seg.end,
+      text: seg.text,
+      speaker: seg.speaker,
+      confidence: seg.confidence || 0
+    })));
+    await fs.writeFile(speakerTranscriptPath, speakerTranscriptContent);
+
+    // Copy audio file to transcription folder
+    const audioExt = path.extname(filePath).toLowerCase();
+    const audioSourceName = `${path.basename(filePath, audioExt)}_audio_source${audioExt === '.wav' ? '.wav' : '.wav'}`;
+    const audioSourcePath = path.join(transcriptionFolder, audioSourceName);
+
+    // Copy the original or converted audio file
+    try {
+      await fs.copyFile(filePath, audioSourcePath);
+    } catch (copyError) {
+      console.warn('Could not copy audio file:', copyError);
+    }
+
+    // Save JSON file with metadata and speaker data
+    const jsonData = {
+      text: result.text,
+      segments: result.segments.map((seg, idx) => ({
+        id: idx,
+        seek: 0,
+        start: seg.start,
+        end: seg.end,
+        text: seg.text,
+        tokens: [],
+        temperature: 0,
+        avg_logprob: 0,
+        compression_ratio: 0,
+        no_speech_prob: 0
+      })),
+      language: result.language || 'en',
+      speakers: result.speakers || [],
+      speakerSegments: result.segments.map(seg => ({
+        speaker: seg.speaker,
+        start: seg.start,
+        end: seg.end,
+        text: seg.text,
+        confidence: seg.confidence || 0
+      })),
+      diarizationMetadata: {
+        backend: result.metadata?.backend || config.backend,
+        processingTimeSeconds: result.metadata?.processing_time_seconds || 0,
+        numSpeakers: result.speakers?.length || 0
+      },
+      metadata: {
+        originalFile: filePath,
+        transcribedAt: new Date().toISOString(),
+        duration: null,
+        wordCount: result.text.split(/\s+/).length,
+        audioSourceFile: audioSourcePath,
+        customName: customName || path.basename(filePath, path.extname(filePath))
+      }
+    };
+
+    const jsonPath = path.join(transcriptionFolder, jsonFileName);
+    await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2));
+
+    sendProgress('Diarization complete!');
+
+    // Send completion
+    const finalResult = {
+      transcription: result.text,
+      jsonData: jsonData,
+      srt: srtContent,
+      savedPath: textPath,
+      jsonPath: jsonPath,
+      srtPath: srtPath,
+      fileName: textFileName,
+      jsonFileName: jsonFileName,
+      srtFileName: srtFileName,
+      folderPath: transcriptionFolder
+    };
+
+    event.sender.send(`diarization-complete-${streamId}`, finalResult);
+    return finalResult;
+
+  } catch (error) {
+    console.error('Diarization error:', error);
+    event.sender.send(`diarization-error-${streamId}`, error.message);
+    throw new Error(`Diarization failed: ${error.message}`);
+  }
+});
+
+// Helper function to format time for SRT
+function formatSRTTime(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.round((seconds % 1) * 1000);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
+} 

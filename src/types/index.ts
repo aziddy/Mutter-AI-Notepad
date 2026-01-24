@@ -30,6 +30,14 @@ export interface TranscriptionJsonData {
   segments: TranscriptionSegment[];
   language: string;
   metadata: TranscriptionMetadata;
+  // Speaker diarization data (optional)
+  speakers?: string[];
+  speakerSegments?: SpeakerSegment[];
+  diarizationMetadata?: {
+    backend: string;
+    processingTimeSeconds: number;
+    numSpeakers: number;
+  };
 }
 
 export interface TranscriptionSegment {
@@ -58,6 +66,39 @@ export interface SRTEntry {
   startTime: number;
   endTime: number;
   text: string;
+}
+
+// Speaker diarization types
+export interface DiarizationConfig {
+  enabled: boolean;
+  backend: 'fluidaudio' | 'pyannote';
+  hfToken?: string;
+}
+
+export interface DiarizationEnvironmentCheck {
+  ready: boolean;
+  message: string;
+  details: {
+    backend: string;
+    whisperReady: boolean;
+    fluidaudioReady?: boolean;
+    pyannoteScript?: boolean;
+    venvExists?: boolean;
+    hfTokenSet?: boolean;
+  };
+}
+
+export interface SpeakerSegment {
+  speaker: string;
+  start: number;
+  end: number;
+  text: string;
+  confidence?: number;
+}
+
+export interface SRTEntryWithSpeaker extends SRTEntry {
+  speaker?: string;
+  speakerConfidence?: number;
 }
 
 // Audio Player types
@@ -186,6 +227,32 @@ export interface ElectronAPI {
     success: boolean;
     message: string;
   }>;
+
+  // Diarization methods
+  checkDiarizationEnvironment: (backend: string) => Promise<DiarizationEnvironmentCheck>;
+  getDiarizationConfig: () => Promise<DiarizationConfig>;
+  updateDiarizationConfig: (config: Partial<DiarizationConfig>) => Promise<{
+    success: boolean;
+    message: string;
+  }>;
+  transcribeFileWithDiarization: (
+    filePath: string,
+    customName: string | undefined,
+    onProgress: (message: string) => void,
+    onComplete: (result: {
+      transcription: string;
+      jsonData: TranscriptionJsonData;
+      srt: string;
+      savedPath: string;
+      jsonPath: string;
+      srtPath: string | null;
+      fileName: string;
+      jsonFileName: string;
+      srtFileName: string;
+      folderPath: string;
+    }) => void,
+    onError: (error: string) => void
+  ) => () => void; // Returns cleanup function
 }
 
 declare global {

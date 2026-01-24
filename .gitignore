@@ -155,6 +155,7 @@ scripts/diarization/venv/
 scripts/diarization/FluidAudio/
 diarization-test-output.json
 diarization-test-output.txt
+tests/diarization/fixtures/diarization-test-output.*
 
 # Root folder audio files
 /*.wav

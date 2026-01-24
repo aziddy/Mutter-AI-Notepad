@@ -9,6 +9,7 @@ import {
   getFixtureAudioFiles,
   loadFixtureMetadata,
   PROJECT_ROOT,
+  TEST_FIXTURES_DIR,
 } from '../setup';
 
 // Path to the diarization service
@@ -105,6 +106,47 @@ describe('FluidAudio Speaker Diarization', () => {
         const result = await service.diarize(audioFile);
         diarizationResults.set(audioFile, result);
       }
+
+      // Write output files to fixtures folder
+      const outputData: Record<string, DiarizationResult> = {};
+      const textLines: string[] = [];
+
+      for (const [audioPath, result] of diarizationResults.entries()) {
+        const fileName = path.basename(audioPath);
+        outputData[fileName] = result;
+
+        // Build transcript-style text output
+        textLines.push(`File: ${fileName}`);
+        if (result.success && result.speakers) {
+          textLines.push(`Speakers: ${result.speakers.join(', ')}`);
+        }
+        textLines.push('');
+        textLines.push('---');
+        textLines.push('');
+
+        if (result.success && result.segments) {
+          for (const segment of result.segments) {
+            const speaker = segment.speaker || 'UNKNOWN';
+            textLines.push(`${speaker}: ${segment.text}`);
+            textLines.push('');
+          }
+        } else if (result.error) {
+          textLines.push(`Error: ${result.error}`);
+          textLines.push('');
+        }
+      }
+
+      // Write JSON output
+      fs.writeFileSync(
+        path.join(TEST_FIXTURES_DIR, 'diarization-test-output.json'),
+        JSON.stringify(outputData, null, 2)
+      );
+
+      // Write text output
+      fs.writeFileSync(
+        path.join(TEST_FIXTURES_DIR, 'diarization-test-output.txt'),
+        textLines.join('\n')
+      );
     }
   }, TEST_TIMEOUT);
 

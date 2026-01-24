@@ -77,6 +77,36 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
   // SRT view mode state
   const [srtViewMode, setSrtViewMode] = useState<'segmented' | 'continuous'>('segmented');
 
+  // Text view mode state
+  const [textViewMode, setTextViewMode] = useState<'plain' | 'speakers'>('plain');
+
+  // Generate formatted speaker transcript from speakerSegments
+  const generateSpeakerTranscript = useCallback(() => {
+    const segments = state.currentJsonData?.speakerSegments;
+    if (!segments || segments.length === 0) return '';
+
+    const lines: string[] = [];
+    let currentSpeaker: string | null = null;
+    let currentText: string[] = [];
+
+    for (const segment of segments) {
+      const speaker = segment.speaker || 'UNKNOWN';
+      if (speaker !== currentSpeaker) {
+        if (currentSpeaker && currentText.length > 0) {
+          lines.push(`[${currentSpeaker}] ${currentText.join(' ')}`);
+        }
+        currentSpeaker = speaker;
+        currentText = [segment.text.trim()];
+      } else {
+        currentText.push(segment.text.trim());
+      }
+    }
+    if (currentSpeaker && currentText.length > 0) {
+      lines.push(`[${currentSpeaker}] ${currentText.join(' ')}`);
+    }
+    return lines.join('\n');
+  }, [state.currentJsonData?.speakerSegments]);
+
   // Load user preferences on mount
   useEffect(() => {
     const loadPreferences = async () => {
@@ -103,14 +133,25 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
   }, [updateUserPreferences]);
 
   const handleCopyTranscription = () => {
-    if (!state.currentTranscription) return;
+    let contentToCopy = '';
 
-    navigator.clipboard.writeText(state.currentTranscription).then(() => {
+    // Copy content based on current view
+    if (state.activeTab === 'srt') {
+      contentToCopy = state.srtContent || '';
+    } else if (textViewMode === 'speakers' && state.currentJsonData?.speakerSegments?.length) {
+      contentToCopy = generateSpeakerTranscript();
+    } else {
+      contentToCopy = state.currentTranscription || '';
+    }
+
+    if (!contentToCopy) return;
+
+    navigator.clipboard.writeText(contentToCopy).then(() => {
       dispatch({
         type: 'ADD_TOAST',
         payload: {
           id: Date.now().toString(),
-          message: 'Transcription copied to clipboard!',
+          message: 'Copied to clipboard!',
           type: 'success'
         }
       });
@@ -119,7 +160,7 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
         type: 'ADD_TOAST',
         payload: {
           id: Date.now().toString(),
-          message: 'Failed to copy transcription',
+          message: 'Failed to copy',
           type: 'error'
         }
       });
@@ -268,8 +309,25 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
         </div>
 
         <div className={`tab-content ${state.activeTab === 'text' ? 'active' : ''}`}>
+          {/* View mode selector (only when speakers available) */}
+          {state.currentJsonData?.speakerSegments && state.currentJsonData.speakerSegments.length > 0 && (
+            <div className="text-view-mode-select">
+              <label htmlFor="text-view-mode">View:</label>
+              <select
+                id="text-view-mode"
+                value={textViewMode}
+                onChange={(e) => setTextViewMode(e.target.value as 'plain' | 'speakers')}
+              >
+                <option value="plain">Plain Text</option>
+                <option value="speakers">Speaker Transcript</option>
+              </select>
+            </div>
+          )}
           <div className="transcription-text">
-            {state.currentTranscription}
+            {textViewMode === 'speakers' && state.currentJsonData?.speakerSegments && state.currentJsonData.speakerSegments.length > 0
+              ? generateSpeakerTranscript()
+              : state.currentTranscription
+            }
           </div>
         </div>
 

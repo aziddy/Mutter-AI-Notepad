@@ -14,6 +14,8 @@
         "test:watch": "vitest",
         "test:ui": "vitest --ui",
         "test:diarization": "node scripts/test-diarization.js",
+        "test:diarization:fluidaudio": "node scripts/test-diarization.js --backend fluidaudio",
+        "test:diarization:pyannote": "node scripts/test-diarization.js --backend pyannote",
         "test-local-llm": "node scripts/test-local-llm.js",
         "test-qwen3-dl-links": "node scripts/download-qwen3.js --test",
         "download-qwen3-0.6b-8Bit": "node scripts/download-qwen3.js qwen3-0.6b q8_0",

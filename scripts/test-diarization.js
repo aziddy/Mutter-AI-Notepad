@@ -4,13 +4,18 @@
  *
  * Usage:
  *   npm run test:diarization -- /path/to/audio.wav
- *   node scripts/test-diarization.js [audio_file]
+ *   npm run test:diarization -- /path/to/audio.wav --backend fluidaudio
+ *   node scripts/test-diarization.js [audio_file] [--backend pyannote|fluidaudio]
+ *
+ * Backends:
+ *   pyannote    - Accurate but slow (~90s for 2min audio). Requires HF_TOKEN. (default)
+ *   fluidaudio  - Fast (~2s for 2min audio). macOS only, slightly less accurate.
  *
  * Environment:
- *   HF_TOKEN - Hugging Face token for diarization (required for speaker labels)
+ *   HF_TOKEN - Hugging Face token for diarization (required for pyannote backend)
  *   Can be set in .env file at project root
  *
- * Uses whisper.cpp (Metal GPU) for transcription + pyannote.audio for speaker diarization
+ * Uses whisper.cpp (Metal GPU) for transcription + selected backend for speaker diarization
  */
 
 // Load .env file from project root
@@ -132,36 +137,54 @@ function formatDuration(seconds) {
 /**
  * Run the diarization test.
  * @param {string|null} audioFile
+ * @param {string} backend - 'pyannote' or 'fluidaudio'
  */
-async function runTests(audioFile) {
+async function runTests(audioFile, backend = 'pyannote') {
   console.log('');
   console.log('='.repeat(60));
   console.log('  Speaker Diarization Test');
   console.log('='.repeat(60));
   console.log('');
 
-  console.log('  Mode: whisper.cpp (Metal GPU) + pyannote.audio (CPU)');
+  const backendLabel =
+    backend === 'fluidaudio'
+      ? 'FluidAudio (CoreML/ANE)'
+      : 'pyannote.audio (CPU)';
+  console.log(`  Mode: whisper.cpp (Metal GPU) + ${backendLabel}`);
   console.log('');
 
-  const service = new DiarizationService();
+  const service = new DiarizationService({ backend });
 
   // Step 1: Check environment
   console.log('[1/3] Checking environment...');
   console.log('');
   const envCheck = await service.checkEnvironment();
 
-  console.log('  Pyannote script:', envCheck.details.pyannoteScript ? 'Found' : 'MISSING');
-  console.log('  Virtual env:  ', envCheck.details.venvExists ? 'Found' : 'MISSING');
-  console.log('  HF_TOKEN:     ', envCheck.details.hfTokenSet ? 'Set' : 'NOT SET (diarization disabled)');
+  console.log('  Backend:      ', backend);
+  console.log('  Whisper:      ', envCheck.details.whisperReady ? 'Ready' : 'NOT READY');
+
+  if (backend === 'fluidaudio') {
+    console.log('  FluidAudio:   ', envCheck.details.fluidaudioReady ? 'Ready' : 'NOT READY');
+  } else {
+    console.log('  Pyannote script:', envCheck.details.pyannoteScript ? 'Found' : 'MISSING');
+    console.log('  Virtual env:  ', envCheck.details.venvExists ? 'Found' : 'MISSING');
+    console.log('  HF_TOKEN:     ', envCheck.details.hfTokenSet ? 'Set' : 'NOT SET (diarization disabled)');
+  }
   console.log('');
 
   if (!envCheck.ready) {
     console.error('Environment not ready!');
     console.error('');
-    console.error('Setup instructions:');
-    console.error('  1. cd scripts/diarization');
-    console.error('  2. bash setup-pyannote.sh');
-    console.error('  3. Add HF_TOKEN to .env file in project root');
+    if (backend === 'fluidaudio') {
+      console.error('Setup instructions for FluidAudio:');
+      console.error('  1. cd scripts/diarization/FluidAudio');
+      console.error('  2. swift build -c release');
+    } else {
+      console.error('Setup instructions for pyannote:');
+      console.error('  1. cd scripts/diarization');
+      console.error('  2. bash setup-pyannote.sh');
+      console.error('  3. Add HF_TOKEN to .env file in project root');
+    }
     process.exit(1);
   }
 
@@ -374,7 +397,24 @@ async function runTests(audioFile) {
 }
 
 // Parse command line args
-const audioFile = process.argv[2] || null;
+function parseArgs() {
+  const args = process.argv.slice(2);
+  let audioFile = null;
+  let backend = 'pyannote';
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--backend' && args[i + 1]) {
+      backend = args[i + 1];
+      i++;
+    } else if (!args[i].startsWith('--')) {
+      audioFile = args[i];
+    }
+  }
+
+  return { audioFile, backend };
+}
+
+const { audioFile, backend } = parseArgs();
 
 // Run
-runTests(audioFile);
+runTests(audioFile, backend);

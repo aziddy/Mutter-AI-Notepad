@@ -152,6 +152,7 @@ user-preferences.json
 
 # Diarization
 scripts/diarization/venv/
+scripts/diarization/FluidAudio/
 diarization-test-output.json
 diarization-test-output.txt
 

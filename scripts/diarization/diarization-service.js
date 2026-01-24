@@ -11,16 +11,19 @@ const path = require('path');
 const fs = require('fs');
 const { TranscriptionService } = require('../../src/transcription');
 const { alignSpeakers, parseSRT } = require('../../src/utils/align-speakers');
+const { runFluidAudio, checkFluidAudioAvailable } = require('./run_fluidaudio');
 
 class DiarizationService {
   /**
    * Create a new DiarizationService instance.
    * @param {Object} options - Configuration options
+   * @param {string} [options.backend='pyannote'] - Backend to use: 'pyannote' (accurate, slow) or 'fluidaudio' (fast, macOS only)
    * @param {string} [options.hfToken] - Hugging Face token (or use HF_TOKEN env var)
    * @param {number} [options.minSpeakers] - Minimum number of speakers hint
    * @param {number} [options.maxSpeakers] - Maximum number of speakers hint
    */
   constructor(options = {}) {
+    this.backend = options.backend || 'pyannote';
     this.scriptDir = __dirname;
     this.pyannoteScript = path.join(this.scriptDir, 'run_pyannote.py');
     this.venvPython = path.join(this.scriptDir, 'venv', 'bin', 'python');
@@ -36,9 +39,7 @@ class DiarizationService {
    */
   async checkEnvironment() {
     const checks = {
-      pyannoteScript: fs.existsSync(this.pyannoteScript),
-      venvExists: fs.existsSync(this.venvPython),
-      hfTokenSet: !!this.hfToken,
+      backend: this.backend,
       whisperReady: false,
     };
 
@@ -50,30 +51,49 @@ class DiarizationService {
       checks.whisperError = e.message;
     }
 
-    const ready =
-      checks.pyannoteScript && checks.venvExists && checks.whisperReady;
     const messages = [];
 
-    if (!checks.pyannoteScript) {
-      messages.push(`Pyannote script not found: ${this.pyannoteScript}`);
-    }
-    if (!checks.venvExists) {
-      messages.push(
-        'Virtual environment not found. Run: cd scripts/diarization && bash setup-pyannote.sh'
-      );
-    }
     if (!checks.whisperReady) {
       messages.push(`Whisper not ready: ${checks.whisperError || 'unknown'}`);
     }
-    if (!checks.hfTokenSet) {
-      messages.push(
-        'HF_TOKEN not set. Diarization requires a Hugging Face token.'
-      );
+
+    // Backend-specific checks
+    if (this.backend === 'fluidaudio') {
+      const fluidCheck = checkFluidAudioAvailable();
+      checks.fluidaudioReady = fluidCheck.available;
+      if (!fluidCheck.available) {
+        messages.push(fluidCheck.message);
+      }
+    } else {
+      // pyannote checks
+      checks.pyannoteScript = fs.existsSync(this.pyannoteScript);
+      checks.venvExists = fs.existsSync(this.venvPython);
+      checks.hfTokenSet = !!this.hfToken;
+
+      if (!checks.pyannoteScript) {
+        messages.push(`Pyannote script not found: ${this.pyannoteScript}`);
+      }
+      if (!checks.venvExists) {
+        messages.push(
+          'Virtual environment not found. Run: cd scripts/diarization && bash setup-pyannote.sh'
+        );
+      }
+      if (!checks.hfTokenSet) {
+        messages.push(
+          'HF_TOKEN not set. Diarization requires a Hugging Face token.'
+        );
+      }
     }
+
+    const ready =
+      checks.whisperReady &&
+      (this.backend === 'fluidaudio'
+        ? checks.fluidaudioReady
+        : checks.pyannoteScript && checks.venvExists);
 
     return {
       ready,
-      message: ready ? 'Environment ready' : messages.join('; '),
+      message: ready ? `Environment ready (${this.backend})` : messages.join('; '),
       details: checks,
     };
   }
@@ -160,6 +180,16 @@ class DiarizationService {
   }
 
   /**
+   * Run FluidAudio diarization.
+   * @param {string} audioPath - Path to audio file
+   * @param {Function} [onProgress] - Progress callback
+   * @returns {Promise<{success: boolean, segments: Array, speakers: Array}>}
+   */
+  async runFluidAudio(audioPath, onProgress) {
+    return runFluidAudio(audioPath, { onProgress });
+  }
+
+  /**
    * Run hybrid diarization pipeline.
    * @param {string} audioPath - Path to audio file
    * @param {Object} [options] - Override options
@@ -168,8 +198,10 @@ class DiarizationService {
    */
   async diarize(audioPath, options = {}) {
     const startTime = Date.now();
+    const backendName =
+      this.backend === 'fluidaudio' ? 'FluidAudio (CoreML)' : 'pyannote (CPU)';
 
-    console.log('[Diarization] Starting hybrid diarization pipeline');
+    console.log(`[Diarization] Starting hybrid diarization pipeline (${this.backend})`);
     console.log('[Diarization] Step 1: Running whisper.cpp (Metal GPU)...');
 
     // Step 1: Run whisper.cpp for transcription
@@ -185,23 +217,33 @@ class DiarizationService {
       };
     }
 
-    // Step 2: Run pyannote for speaker diarization
-    console.log('[Diarization] Step 2: Running pyannote (CPU)...');
+    // Step 2: Run diarization with selected backend
+    console.log(`[Diarization] Step 2: Running ${backendName}...`);
 
-    let pyannoteResult;
+    let diarizationResult;
     try {
-      pyannoteResult = await this.runPyannote(audioPath, options.onProgress);
-      console.log('[Diarization] Pyannote diarization complete');
+      if (this.backend === 'fluidaudio') {
+        diarizationResult = await this.runFluidAudio(
+          audioPath,
+          options.onProgress
+        );
+      } else {
+        diarizationResult = await this.runPyannote(
+          audioPath,
+          options.onProgress
+        );
+      }
+      console.log(`[Diarization] ${backendName} diarization complete`);
     } catch (error) {
       return {
         success: false,
         error: 'DiarizationError',
-        message: `Pyannote diarization failed: ${error.message}`,
+        message: `${backendName} diarization failed: ${error.message}`,
       };
     }
 
-    if (!pyannoteResult.success) {
-      return pyannoteResult;
+    if (!diarizationResult.success) {
+      return diarizationResult;
     }
 
     // Step 3: Align transcription with speaker segments
@@ -222,7 +264,7 @@ class DiarizationService {
 
     const alignedSegments = alignSpeakers(
       whisperSegments,
-      pyannoteResult.segments
+      diarizationResult.segments
     );
 
     const duration = (Date.now() - startTime) / 1000;
@@ -233,14 +275,16 @@ class DiarizationService {
       success: true,
       text: transcription.text,
       segments: alignedSegments,
-      speakers: pyannoteResult.speakers || [],
+      speakers: diarizationResult.speakers || [],
       language: 'en', // whisper.cpp defaults to en
       metadata: {
         whisper: 'whisper.cpp (Metal GPU)',
-        diarization: 'pyannote.audio (CPU)',
+        diarization: backendName,
+        backend: this.backend,
         processing_time_seconds: duration,
         num_segments: alignedSegments.length,
-        num_speakers: (pyannoteResult.speakers || []).length,
+        num_speakers: (diarizationResult.speakers || []).length,
+        ...(diarizationResult.metadata || {}),
       },
     };
   }

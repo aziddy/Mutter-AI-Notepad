@@ -104,6 +104,11 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }, []);
 
+  // Strip speaker prefix from text (e.g., "[SPEAKER_00] Hello" -> "Hello", "[UNKNOWN] Hello" -> "Hello")
+  const stripSpeakerPrefix = useCallback((text: string) => {
+    return text.replace(/^\[(SPEAKER_\d+|UNKNOWN)\]\s*/, '');
+  }, []);
+
   // Handle entry click
   const handleEntryClick = useCallback((entry: SRTEntry) => {
     onEntryClick(entry);
@@ -146,9 +151,9 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
               className={`srt-continuous-entry ${isPlaying ? 'playing' : ''}`}
               onClick={() => handleEntryClick(entry)}
               title={`${formatTime(entry.startTime)} - ${formatTime(entry.endTime)}${speaker ? ` (${speaker})` : ''}`}
-              style={color ? { borderLeft: `3px solid ${color}`, paddingLeft: '8px', marginLeft: '4px' } : undefined}
+              style={color ? { backgroundColor: `${color}20`, borderRadius: '2px', padding: '2px 4px' } : undefined}
             >
-              {entry.text}
+              {stripSpeakerPrefix(entry.text)}
             </span>
           );
         })}

@@ -1,6 +1,7 @@
 # FluidAudio Speaker Diarization
 
 FluidAudio is a macOS-only Swift/CoreML-based speaker diarization backend that identifies "who spoke when" in audio files. It leverages Apple's Neural Engine for fast on-device inference.
+https://github.com/FluidInference/FluidAudio
 
 ## Speed vs Accuracy Tradeoff
 

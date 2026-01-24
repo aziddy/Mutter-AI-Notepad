@@ -13,6 +13,7 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:ui": "vitest --ui",
+        "test:fluidaudio": "vitest run tests/diarization/fluidaudio.test.ts",
         "test:diarization": "node scripts/test-diarization.js",
         "test:diarization:fluidaudio": "node scripts/test-diarization.js --backend fluidaudio",
         "test:diarization:pyannote": "node scripts/test-diarization.js --backend pyannote",

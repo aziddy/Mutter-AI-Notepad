@@ -158,3 +158,4 @@ diarization-test-output.txt
 
 # Root folder audio files
 /*.wav
+/*.txt

@@ -545,8 +545,8 @@ body {
 }
 
 .srt-continuous-entry.playing {
-    background: #FEF3C7;
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+    background: #C4B5FD !important;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.5);
 }
 
 /* Speaker Labels */

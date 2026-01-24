@@ -1,5 +1,5 @@
 /**
- * Vitest tests for WhisperX speaker diarization
+ * Vitest tests for FluidAudio speaker diarization
  */
 
 import { describe, it, expect, beforeAll, test } from 'vitest';
@@ -34,10 +34,12 @@ interface DiarizationResult {
   speakers?: string[];
   language?: string;
   metadata?: {
-    model: string;
-    diarization_enabled: boolean;
-    compute_type: string;
+    backend: string;
     device: string;
+    processing_time_seconds?: number;
+    real_time_factor?: number;
+    duration_seconds?: number;
+    num_speakers?: number;
   };
   error?: string;
   message?: string;
@@ -45,6 +47,7 @@ interface DiarizationResult {
 
 interface DiarizationServiceClass {
   new (options?: {
+    backend?: string;
     hfToken?: string;
     model?: string;
     device?: string;
@@ -54,9 +57,9 @@ interface DiarizationServiceClass {
       ready: boolean;
       message: string;
       details: {
-        pythonScript: boolean;
-        venvExists: boolean;
-        hfTokenSet: boolean;
+        backend: string;
+        whisperReady: boolean;
+        fluidaudioReady?: boolean;
       };
     }>;
     diarize(
@@ -84,14 +87,14 @@ const TEST_TIMEOUT = TIMEOUT_PER_FIXTURE * Math.max(testAudioFiles.length, 1);
 // Populated in beforeAll, used by all tests
 const diarizationResults = new Map<string, DiarizationResult>();
 
-describe('Speaker Diarization', () => {
+describe('FluidAudio Speaker Diarization', () => {
   let DiarizationService: DiarizationServiceClass;
   let service: InstanceType<DiarizationServiceClass>;
   let environmentReady: boolean;
 
   beforeAll(async () => {
     DiarizationService = loadDiarizationService();
-    service = new DiarizationService();
+    service = new DiarizationService({ backend: 'fluidaudio' });
 
     const envCheck = await service.checkEnvironment();
     environmentReady = envCheck.ready;
@@ -106,17 +109,7 @@ describe('Speaker Diarization', () => {
   }, TEST_TIMEOUT);
 
   describe('Environment Check', () => {
-    it('should have Python script present', () => {
-      const pythonScript = path.join(
-        PROJECT_ROOT,
-        'scripts',
-        'diarization',
-        'run_whisperx.py'
-      );
-      expect(fs.existsSync(pythonScript)).toBe(true);
-    });
-
-    it('should have Node.js service present', () => {
+    it('should have diarization service present', () => {
       expect(fs.existsSync(DIARIZATION_SERVICE_PATH)).toBe(true);
     });
 
@@ -130,12 +123,12 @@ describe('Speaker Diarization', () => {
       expect(typeof envCheck.message).toBe('string');
     });
 
-    it('should include all environment check details', async () => {
+    it('should include FluidAudio environment check details', async () => {
       const envCheck = await service.checkEnvironment();
 
-      expect(envCheck.details).toHaveProperty('pythonScript');
-      expect(envCheck.details).toHaveProperty('venvExists');
-      expect(envCheck.details).toHaveProperty('hfTokenSet');
+      expect(envCheck.details).toHaveProperty('backend', 'fluidaudio');
+      expect(envCheck.details).toHaveProperty('whisperReady');
+      expect(envCheck.details).toHaveProperty('fluidaudioReady');
     });
   });
 
@@ -204,8 +197,8 @@ describe('Speaker Diarization', () => {
       }
     );
 
-    test.skipIf(testAudioFiles.length === 0 || !process.env.HF_TOKEN)(
-      'should have speaker assignments when HF_TOKEN is set',
+    test.skipIf(testAudioFiles.length === 0)(
+      'should have speaker assignments',
       async (ctx) => {
         if (!environmentReady) ctx.skip();
         for (const audioFile of testAudioFiles) {
@@ -219,7 +212,7 @@ describe('Speaker Diarization', () => {
       }
     );
 
-    test.skipIf(testAudioFiles.length === 0 || !process.env.HF_TOKEN)(
+    test.skipIf(testAudioFiles.length === 0)(
       'should identify correct number of speakers per fixture',
       async (ctx) => {
         if (!environmentReady) ctx.skip();
@@ -235,7 +228,7 @@ describe('Speaker Diarization', () => {
     );
 
     test.skipIf(testAudioFiles.length === 0)(
-      'should include metadata in result',
+      'should include FluidAudio metadata in result',
       async (ctx) => {
         if (!environmentReady) ctx.skip();
         for (const audioFile of testAudioFiles) {
@@ -243,8 +236,7 @@ describe('Speaker Diarization', () => {
 
           if (result.success) {
             expect(result.metadata).toBeDefined();
-            expect(result.metadata).toHaveProperty('model');
-            expect(result.metadata).toHaveProperty('diarization_enabled');
+            expect(result.metadata).toHaveProperty('backend', 'fluidaudio');
             expect(result.metadata).toHaveProperty('device');
           }
         }

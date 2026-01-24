@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
+# Thread optimization - MUST come before any other imports
+import os
+os.environ['OMP_NUM_THREADS'] = '8'
+os.environ['MKL_NUM_THREADS'] = '8'
+os.environ['KMP_BLOCKTIME'] = '1'
+
 # Fix for PyTorch 2.6+ compatibility MUST come before any other imports
 import torch
+torch.set_num_threads(8)
 import torch.serialization
 _original_torch_load = torch.load
 def _patched_torch_load(*args, **kwargs):

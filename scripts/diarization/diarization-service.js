@@ -104,7 +104,13 @@ class DiarizationService {
 
       const proc = spawn(python, args, {
         cwd: this.scriptDir,
-        env: { ...process.env, PYTHONUNBUFFERED: '1' },
+        env: {
+          ...process.env,
+          PYTHONUNBUFFERED: '1',
+          OMP_NUM_THREADS: '8',
+          MKL_NUM_THREADS: '8',
+          KMP_BLOCKTIME: '1',
+        },
       });
 
       let stdout = '';

@@ -10,10 +10,7 @@
  *   HF_TOKEN - Hugging Face token for diarization (required for speaker labels)
  *   Can be set in .env file at project root
  *
- * Options:
- *   --whisperx  Use WhisperX mode (CPU only) instead of default hybrid mode
- *
- * Default mode is HYBRID (whisper.cpp GPU + pyannote CPU) - faster on Mac
+ * Uses whisper.cpp (Metal GPU) for transcription + pyannote.audio for speaker diarization
  */
 
 // Load .env file from project root
@@ -22,7 +19,6 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const path = require('path');
 const fs = require('fs');
 const { DiarizationService } = require('./diarization/diarization-service');
-const { HybridDiarizationService } = require('./diarization/hybrid-diarization-service');
 const { reconcileSpeakersFromSRT } = require('../src/utils/reconcile-speakers');
 const { formatSpeakerTranscript } = require('../src/utils/format-speaker-transcript');
 
@@ -136,27 +132,25 @@ function formatDuration(seconds) {
 /**
  * Run the diarization test.
  * @param {string|null} audioFile
- * @param {boolean} useHybrid - Use hybrid mode (whisper.cpp GPU + pyannote CPU)
  */
-async function runTests(audioFile, useHybrid = false) {
+async function runTests(audioFile) {
   console.log('');
   console.log('='.repeat(60));
   console.log('  Speaker Diarization Test');
   console.log('='.repeat(60));
   console.log('');
 
-  const mode = useHybrid ? 'HYBRID (whisper.cpp GPU + pyannote CPU)' : 'WhisperX (CPU)';
-  console.log(`  Mode: ${mode}`);
+  console.log('  Mode: whisper.cpp (Metal GPU) + pyannote.audio (CPU)');
   console.log('');
 
-  const service = useHybrid ? new HybridDiarizationService() : new DiarizationService();
+  const service = new DiarizationService();
 
   // Step 1: Check environment
   console.log('[1/3] Checking environment...');
   console.log('');
   const envCheck = await service.checkEnvironment();
 
-  console.log('  Python script:', envCheck.details.pythonScript ? 'Found' : 'MISSING');
+  console.log('  Pyannote script:', envCheck.details.pyannoteScript ? 'Found' : 'MISSING');
   console.log('  Virtual env:  ', envCheck.details.venvExists ? 'Found' : 'MISSING');
   console.log('  HF_TOKEN:     ', envCheck.details.hfTokenSet ? 'Set' : 'NOT SET (diarization disabled)');
   console.log('');
@@ -166,10 +160,8 @@ async function runTests(audioFile, useHybrid = false) {
     console.error('');
     console.error('Setup instructions:');
     console.error('  1. cd scripts/diarization');
-    console.error('  2. bash setup-whisperx.sh');
-    console.error('  3. cp .env.example .env && edit .env to add HF_TOKEN');
-    console.error('');
-    console.error('See docs/add-speaker-diarization-plan.md for details.');
+    console.error('  2. bash setup-pyannote.sh');
+    console.error('  3. Add HF_TOKEN to .env file in project root');
     process.exit(1);
   }
 
@@ -382,9 +374,7 @@ async function runTests(audioFile, useHybrid = false) {
 }
 
 // Parse command line args
-const args = process.argv.slice(2);
-const useWhisperX = args.includes('--whisperx'); // Use --whisperx to force old CPU-only mode
-const audioFile = args.find((arg) => !arg.startsWith('--')) || null;
+const audioFile = process.argv[2] || null;
 
-// Run (hybrid mode is default)
-runTests(audioFile, !useWhisperX);
+// Run
+runTests(audioFile);

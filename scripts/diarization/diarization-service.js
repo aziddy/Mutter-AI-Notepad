@@ -1,101 +1,73 @@
 /**
- * Node.js Diarization Service
- * Wrapper for WhisperX Python script that handles speaker diarization.
+ * Diarization Service
  *
- * Usage:
- *   const { DiarizationService } = require('./diarization-service');
- *   const service = new DiarizationService();
- *   const result = await service.diarize('/path/to/audio.wav');
+ * Combines:
+ * - whisper.cpp for transcription (Metal GPU accelerated on Mac)
+ * - pyannote.audio for speaker diarization (CPU)
  */
 
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-
-/**
- * @typedef {Object} DiarizationSegment
- * @property {number} start - Start time in seconds
- * @property {number} end - End time in seconds
- * @property {string} text - Segment text
- * @property {string} [speaker] - Speaker ID (e.g., "SPEAKER_00")
- * @property {Array} [words] - Word-level alignments
- */
-
-/**
- * @typedef {Object} DiarizationResult
- * @property {boolean} success - Whether diarization succeeded
- * @property {string} [text] - Full transcription text
- * @property {DiarizationSegment[]} [segments] - Segments with speaker assignments
- * @property {string[]} [speakers] - List of unique speaker IDs
- * @property {string} [language] - Detected language
- * @property {Object} [metadata] - Processing metadata
- * @property {string} [error] - Error type if failed
- * @property {string} [message] - Error message if failed
- */
-
-/**
- * @typedef {Object} EnvironmentCheck
- * @property {boolean} ready - Whether environment is ready
- * @property {string} message - Status message
- * @property {Object} details - Detailed check results
- */
+const { TranscriptionService } = require('../../src/transcription');
+const { alignSpeakers, parseSRT } = require('../../src/utils/align-speakers');
 
 class DiarizationService {
   /**
    * Create a new DiarizationService instance.
    * @param {Object} options - Configuration options
    * @param {string} [options.hfToken] - Hugging Face token (or use HF_TOKEN env var)
-   * @param {string} [options.model='large-v2'] - Whisper model to use
-   * @param {string} [options.device='cpu'] - Device: cpu or cuda
-   * @param {string} [options.computeType='int8'] - Compute type: int8, float16, float32
+   * @param {number} [options.minSpeakers] - Minimum number of speakers hint
+   * @param {number} [options.maxSpeakers] - Maximum number of speakers hint
    */
   constructor(options = {}) {
     this.scriptDir = __dirname;
-    this.pythonScript = path.join(this.scriptDir, 'run_whisperx.py');
+    this.pyannoteScript = path.join(this.scriptDir, 'run_pyannote.py');
     this.venvPython = path.join(this.scriptDir, 'venv', 'bin', 'python');
     this.hfToken = options.hfToken || process.env.HF_TOKEN;
-    this.model = options.model || 'large-v2';
-    this.device = options.device || this.detectDevice();
-    this.computeType = options.computeType || 'int8';
+    this.minSpeakers = options.minSpeakers;
+    this.maxSpeakers = options.maxSpeakers;
+    this.transcriptionService = new TranscriptionService();
   }
 
   /**
-   * Detect the best available device for processing.
-   * Note: WhisperX uses faster-whisper (CTranslate2) which only supports 'cpu' and 'cuda'.
-   * MPS (Metal) is NOT supported by the underlying library.
-   * @returns {string} Device identifier: 'cuda' if available, 'cpu' otherwise
-   */
-  detectDevice() {
-    // WhisperX/faster-whisper/CTranslate2 only supports 'cpu' and 'cuda'
-    // MPS is not supported - returns 'unsupported device mps' error
-    return 'cpu';
-  }
-
-  /**
-   * Check if the diarization environment is properly set up.
-   * @returns {Promise<EnvironmentCheck>}
+   * Check if the environment is properly set up.
+   * @returns {Promise<{ready: boolean, message: string, details: Object}>}
    */
   async checkEnvironment() {
     const checks = {
-      pythonScript: fs.existsSync(this.pythonScript),
+      pyannoteScript: fs.existsSync(this.pyannoteScript),
       venvExists: fs.existsSync(this.venvPython),
       hfTokenSet: !!this.hfToken,
+      whisperReady: false,
     };
 
-    const ready = checks.pythonScript && checks.venvExists;
+    // Check whisper.cpp
+    try {
+      await this.transcriptionService.initialize();
+      checks.whisperReady = true;
+    } catch (e) {
+      checks.whisperError = e.message;
+    }
+
+    const ready =
+      checks.pyannoteScript && checks.venvExists && checks.whisperReady;
     const messages = [];
 
-    if (!checks.pythonScript) {
-      messages.push(`Python script not found: ${this.pythonScript}`);
+    if (!checks.pyannoteScript) {
+      messages.push(`Pyannote script not found: ${this.pyannoteScript}`);
     }
     if (!checks.venvExists) {
       messages.push(
-        'Virtual environment not found. Run: cd scripts/diarization && bash setup-whisperx.sh'
+        'Virtual environment not found. Run: cd scripts/diarization && bash setup-pyannote.sh'
       );
+    }
+    if (!checks.whisperReady) {
+      messages.push(`Whisper not ready: ${checks.whisperError || 'unknown'}`);
     }
     if (!checks.hfTokenSet) {
       messages.push(
-        'HF_TOKEN not set. Diarization will be disabled (transcription only).'
+        'HF_TOKEN not set. Diarization requires a Hugging Face token.'
       );
     }
 
@@ -107,54 +79,28 @@ class DiarizationService {
   }
 
   /**
-   * Get the Python executable path (venv or system).
-   * @returns {string}
-   */
-  getPythonPath() {
-    if (fs.existsSync(this.venvPython)) {
-      return this.venvPython;
-    }
-    return 'python3';
-  }
-
-  /**
-   * Run speaker diarization on an audio file.
+   * Run pyannote speaker diarization.
    * @param {string} audioPath - Path to audio file
-   * @param {Object} [options] - Override options for this run
-   * @param {string} [options.hfToken] - Hugging Face token
-   * @param {string} [options.model] - Whisper model
-   * @param {string} [options.device] - Device (cpu/cuda)
-   * @param {string} [options.computeType] - Compute type
-   * @param {Function} [options.onProgress] - Progress callback
-   * @returns {Promise<DiarizationResult>}
+   * @param {Function} [onProgress] - Progress callback
+   * @returns {Promise<{success: boolean, segments: Array, speakers: Array}>}
    */
-  async diarize(audioPath, options = {}) {
+  async runPyannote(audioPath, onProgress) {
     return new Promise((resolve, reject) => {
-      const python = this.getPythonPath();
+      const python = this.venvPython;
 
-      const args = [
-        this.pythonScript,
-        audioPath,
-        '--model',
-        options.model || this.model,
-        '--device',
-        options.device || this.device,
-        '--compute-type',
-        options.computeType || this.computeType,
-      ];
+      const args = [this.pyannoteScript, audioPath];
 
-      // Add HF token if available
-      const hfToken = options.hfToken || this.hfToken;
-      if (hfToken) {
-        args.push('--hf-token', hfToken);
+      if (this.hfToken) {
+        args.push('--hf-token', this.hfToken);
+      }
+      if (this.minSpeakers) {
+        args.push('--min-speakers', String(this.minSpeakers));
+      }
+      if (this.maxSpeakers) {
+        args.push('--max-speakers', String(this.maxSpeakers));
       }
 
-      console.log(`[Diarization] Using Python: ${python}`);
-      // Mask HF token in log output
-      const safeArgs = args.map((arg, i) =>
-        args[i - 1] === '--hf-token' ? '***' : arg
-      );
-      console.log(`[Diarization] Running: ${safeArgs.join(' ')}`);
+      console.log(`[Diarization] Running pyannote: ${python}`);
 
       const proc = spawn(python, args, {
         cwd: this.scriptDir,
@@ -171,63 +117,147 @@ class DiarizationService {
       proc.stderr.on('data', (data) => {
         const message = data.toString();
         stderr += message;
-        // Log progress messages
         const lines = message.trim().split('\n');
         lines.forEach((line) => {
           if (line.trim()) {
-            console.log(`[Diarization] ${line}`);
-            if (options.onProgress) {
-              options.onProgress(line);
-            }
+            console.log(`[Pyannote] ${line}`);
+            if (onProgress) onProgress(line);
           }
         });
       });
 
       proc.on('close', (code) => {
-        // Extract JSON from output (whisperx logs may appear before the JSON)
-        const extractJson = (output) => {
-          // Find the first { and last } to extract JSON object
-          const firstBrace = output.indexOf('{');
-          const lastBrace = output.lastIndexOf('}');
-          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-            return output.substring(firstBrace, lastBrace + 1);
-          }
-          return output;
-        };
-
         if (code === 0) {
           try {
-            const jsonStr = extractJson(stdout);
-            const result = JSON.parse(jsonStr);
-            resolve(result);
-          } catch (parseError) {
-            reject(
-              new Error(
-                `Failed to parse output: ${parseError.message}\nOutput: ${stdout}`
-              )
-            );
+            // Extract JSON from stdout
+            const firstBrace = stdout.indexOf('{');
+            const lastBrace = stdout.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace > firstBrace) {
+              const jsonStr = stdout.substring(firstBrace, lastBrace + 1);
+              const result = JSON.parse(jsonStr);
+              resolve(result);
+            } else {
+              reject(new Error('No JSON output from pyannote'));
+            }
+          } catch (e) {
+            reject(new Error(`Failed to parse pyannote output: ${e.message}`));
           }
         } else {
-          // Try to parse error from stdout (our script outputs JSON errors)
-          try {
-            const jsonStr = extractJson(stdout);
-            const errorResult = JSON.parse(jsonStr);
-            resolve(errorResult); // Return the error result, not reject
-          } catch {
-            reject(
-              new Error(`Diarization failed with code ${code}: ${stderr}`)
-            );
-          }
+          reject(new Error(`Pyannote failed with code ${code}: ${stderr}`));
         }
       });
 
       proc.on('error', (error) => {
-        reject(
-          new Error(`Failed to start diarization process: ${error.message}`)
-        );
+        reject(new Error(`Failed to start pyannote: ${error.message}`));
       });
     });
   }
+
+  /**
+   * Run hybrid diarization pipeline.
+   * @param {string} audioPath - Path to audio file
+   * @param {Object} [options] - Override options
+   * @param {Function} [options.onProgress] - Progress callback
+   * @returns {Promise<Object>} - Combined result with transcription and speaker assignments
+   */
+  async diarize(audioPath, options = {}) {
+    const startTime = Date.now();
+
+    console.log('[Diarization] Starting hybrid diarization pipeline');
+    console.log('[Diarization] Step 1: Running whisper.cpp (Metal GPU)...');
+
+    // Step 1: Run whisper.cpp for transcription
+    let transcription;
+    try {
+      transcription = await this.transcriptionService.transcribe(audioPath);
+      console.log('[Diarization] Whisper transcription complete');
+    } catch (error) {
+      return {
+        success: false,
+        error: 'TranscriptionError',
+        message: `Whisper transcription failed: ${error.message}`,
+      };
+    }
+
+    // Step 2: Run pyannote for speaker diarization
+    console.log('[Diarization] Step 2: Running pyannote (CPU)...');
+
+    let pyannoteResult;
+    try {
+      pyannoteResult = await this.runPyannote(audioPath, options.onProgress);
+      console.log('[Diarization] Pyannote diarization complete');
+    } catch (error) {
+      return {
+        success: false,
+        error: 'DiarizationError',
+        message: `Pyannote diarization failed: ${error.message}`,
+      };
+    }
+
+    if (!pyannoteResult.success) {
+      return pyannoteResult;
+    }
+
+    // Step 3: Align transcription with speaker segments
+    console.log('[Diarization] Step 3: Aligning speakers with transcription...');
+
+    // Parse SRT from whisper output
+    let whisperSegments = [];
+    if (transcription.srt) {
+      whisperSegments = parseSRT(transcription.srt);
+    } else if (transcription.json && transcription.json.transcription) {
+      // Parse from JSON
+      whisperSegments = transcription.json.transcription.map((item) => ({
+        start: parseTimestamp(item.timestamps.from),
+        end: parseTimestamp(item.timestamps.to),
+        text: item.text.trim(),
+      }));
+    }
+
+    const alignedSegments = alignSpeakers(
+      whisperSegments,
+      pyannoteResult.segments
+    );
+
+    const duration = (Date.now() - startTime) / 1000;
+    console.log(`[Diarization] Pipeline complete in ${duration.toFixed(1)}s`);
+
+    // Build final result
+    return {
+      success: true,
+      text: transcription.text,
+      segments: alignedSegments,
+      speakers: pyannoteResult.speakers || [],
+      language: 'en', // whisper.cpp defaults to en
+      metadata: {
+        whisper: 'whisper.cpp (Metal GPU)',
+        diarization: 'pyannote.audio (CPU)',
+        processing_time_seconds: duration,
+        num_segments: alignedSegments.length,
+        num_speakers: (pyannoteResult.speakers || []).length,
+      },
+    };
+  }
+}
+
+/**
+ * Parse timestamp string to seconds.
+ * @param {string} ts - Timestamp like "00:00:01.234" or "00:00:01,234"
+ * @returns {number}
+ */
+function parseTimestamp(ts) {
+  if (typeof ts === 'number') return ts;
+  const normalized = ts.replace(',', '.');
+  const match = normalized.match(/(\d{2}):(\d{2}):(\d{2})\.(\d{3})/);
+  if (match) {
+    return (
+      parseInt(match[1]) * 3600 +
+      parseInt(match[2]) * 60 +
+      parseInt(match[3]) +
+      parseInt(match[4]) / 1000
+    );
+  }
+  return 0;
 }
 
 module.exports = { DiarizationService };

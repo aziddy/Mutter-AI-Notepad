@@ -10,6 +10,7 @@ Add speaker diarization capability using WhisperX (Python-based) as a standalone
    - Create account at https://huggingface.co
    - Accept terms at https://huggingface.co/pyannote/speaker-diarization-3.1
    - Accept terms at https://huggingface.co/pyannote/segmentation-3.0
+   - Accept terms at https://huggingface.co/pyannote/speaker-diarization-community-1
    - Create token at https://huggingface.co/settings/tokens
 
 **Why HF Token is Required**: WhisperX uses pyannote.audio models for speaker identification. These models are hosted on Hugging Face with a license requiring authentication. Without the token, WhisperX can still transcribe audio, but cannot identify different speakers.

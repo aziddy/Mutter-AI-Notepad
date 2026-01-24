@@ -100,7 +100,7 @@ def run_diarization(
         print("Loading pyannote speaker-diarization-3.1 pipeline...", file=sys.stderr)
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
-            use_auth_token=hf_token,
+            token=hf_token,
         )
 
         # Force CPU - MPS is not reliably supported
@@ -120,11 +120,19 @@ def run_diarization(
         if diarization_params:
             print(f"Speaker hints: {diarization_params}", file=sys.stderr)
 
-        diarization = pipeline(audio_path, **diarization_params)
+        result = pipeline(audio_path, **diarization_params)
 
         # Convert to segments list
         segments = []
         speakers_set = set()
+
+        # Handle pyannote.audio 4.x output format (DiarizeOutput object)
+        if hasattr(result, 'speaker_diarization'):
+            # pyannote.audio 4.x - access the Annotation via .speaker_diarization
+            diarization = result.speaker_diarization
+        else:
+            # pyannote.audio 3.x - result is already an Annotation
+            diarization = result
 
         for turn, _, speaker in diarization.itertracks(yield_label=True):
             segments.append({

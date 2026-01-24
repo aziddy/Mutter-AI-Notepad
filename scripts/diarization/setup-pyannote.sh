@@ -1,5 +1,7 @@
 #!/bin/bash
-# Setup script for WhisperX diarization environment
+# Setup script for pyannote.audio speaker diarization
+# This is a lean setup - only installs pyannote.audio (no WhisperX)
+# Transcription is handled by whisper.cpp (Metal GPU accelerated)
 
 set -e
 
@@ -7,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/venv"
 
 echo "========================================"
-echo "WhisperX Diarization Environment Setup"
+echo "Pyannote Speaker Diarization Setup"
 echo "========================================"
 echo ""
 
@@ -34,22 +36,15 @@ echo ""
 echo "Upgrading pip..."
 pip install --upgrade pip
 
-# Install PyTorch (platform-aware)
+# Install PyTorch
 echo ""
-if [[ "$(uname -s)" == "Darwin" ]]; then
-    # macOS - use default PyTorch which includes MPS support for Apple Silicon
-    echo "Installing PyTorch with MPS support (macOS)..."
-    pip install torch torchaudio
-else
-    # Linux/Windows - use CPU version (user can reinstall with CUDA if needed)
-    echo "Installing PyTorch (CPU version)..."
-    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-fi
+echo "Installing PyTorch..."
+pip install torch torchaudio
 
-# Install WhisperX
+# Install pyannote.audio (standalone - no WhisperX needed)
 echo ""
-echo "Installing WhisperX..."
-pip install whisperx
+echo "Installing pyannote.audio..."
+pip install pyannote.audio
 
 echo ""
 echo "========================================"
@@ -64,12 +59,8 @@ echo "Setup steps:"
 echo "  1. Create account at https://huggingface.co"
 echo "  2. Accept terms at https://huggingface.co/pyannote/speaker-diarization-3.1"
 echo "  3. Accept terms at https://huggingface.co/pyannote/segmentation-3.0"
-echo "  4. Create token at https://huggingface.co/settings/tokens"
-echo "  5. Add token to .env file in project root:"
-echo "     cp .env.example .env"
-echo "     # Then edit .env and set HF_TOKEN=your_token"
-echo ""
-echo "For GPU support (faster processing), reinstall PyTorch with CUDA:"
-echo "  source $VENV_DIR/bin/activate"
-echo "  pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118"
+echo "  4. Accept terms at https://huggingface.co/pyannote/speaker-diarization-community-1"
+echo "  5. Create token at https://huggingface.co/settings/tokens"
+echo "  6. Add token to .env file in project root:"
+echo "     HF_TOKEN=your_token_here"
 echo ""

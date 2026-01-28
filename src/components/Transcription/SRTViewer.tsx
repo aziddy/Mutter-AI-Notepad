@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useEffect } from 'react';
 import { SRTEntry, SpeakerSegment } from '../../types';
+import HighlightedText from '../Search/HighlightedText';
 
 // Speaker color palette
 const SPEAKER_COLORS = [
@@ -19,6 +20,10 @@ interface SRTViewerProps {
   onEntryClick: (entry: SRTEntry) => void;
   viewMode?: 'segmented' | 'continuous';
   speakerSegments?: SpeakerSegment[];
+  // Search props
+  searchQuery?: string;
+  caseSensitive?: boolean;
+  currentMatchIndex?: number;
 }
 
 const SRTViewer: React.FC<SRTViewerProps> = ({
@@ -27,6 +32,9 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
   onEntryClick,
   viewMode = 'segmented',
   speakerSegments,
+  searchQuery,
+  caseSensitive = false,
+  currentMatchIndex = 0,
 }) => {
   const continuousContainerRef = useRef<HTMLDivElement>(null);
   const playingEntryRef = useRef<HTMLSpanElement>(null);
@@ -97,6 +105,34 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
     return entries;
   }, [srtContent]);
 
+  // Escape special regex characters
+  const escapeRegex = useCallback((str: string): string => {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }, []);
+
+  // Calculate match start index for each entry (cumulative count of matches before this entry)
+  const matchStartIndices = useMemo(() => {
+    if (!searchQuery) return [];
+
+    const indices: number[] = [];
+    let cumulativeMatches = 0;
+
+    try {
+      const flags = caseSensitive ? 'g' : 'gi';
+
+      for (const entry of srtEntries) {
+        indices.push(cumulativeMatches);
+        const regex = new RegExp(escapeRegex(searchQuery), flags);
+        const matches = entry.text.match(regex);
+        cumulativeMatches += matches ? matches.length : 0;
+      }
+    } catch {
+      return srtEntries.map(() => 0);
+    }
+
+    return indices;
+  }, [srtEntries, searchQuery, caseSensitive, escapeRegex]);
+
   // Format time for display
   const formatTime = useCallback((seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -143,6 +179,7 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
             currentPlayingEntry.startTime === entry.startTime &&
             currentPlayingEntry.endTime === entry.endTime;
           const { speaker, color } = findSpeakerForEntry(entry.startTime, entry.endTime);
+          const entryText = stripSpeakerPrefix(entry.text);
 
           return (
             <span
@@ -153,7 +190,17 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
               title={`${formatTime(entry.startTime)} - ${formatTime(entry.endTime)}${speaker ? ` (${speaker})` : ''}`}
               style={color ? { backgroundColor: `${color}20`, borderRadius: '2px', padding: '2px 4px' } : undefined}
             >
-              {stripSpeakerPrefix(entry.text)}
+              {searchQuery ? (
+                <HighlightedText
+                  text={entryText}
+                  searchQuery={searchQuery}
+                  caseSensitive={caseSensitive}
+                  currentMatchGlobalIndex={currentMatchIndex}
+                  matchStartIndex={matchStartIndices[index] || 0}
+                />
+              ) : (
+                entryText
+              )}
             </span>
           );
         })}
@@ -190,7 +237,19 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
                 {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
               </span>
             </div>
-            <div className="srt-entry-text">{entry.text}</div>
+            <div className="srt-entry-text">
+              {searchQuery ? (
+                <HighlightedText
+                  text={entry.text}
+                  searchQuery={searchQuery}
+                  caseSensitive={caseSensitive}
+                  currentMatchGlobalIndex={currentMatchIndex}
+                  matchStartIndex={matchStartIndices[index] || 0}
+                />
+              ) : (
+                entry.text
+              )}
+            </div>
           </div>
         );
       })}

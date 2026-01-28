@@ -2231,4 +2231,126 @@ body {
     font-size: 0.8em;
 }
 
- 
+/* =========================== */
+/* Text Search Styles          */
+/* =========================== */
+
+/* Search Bar Container */
+.search-bar {
+    position: sticky;
+    top: 12px;
+    margin-left: auto;
+    width: fit-content;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #FFFFFF;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    padding: 8px 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.search-bar.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.search-input {
+    border: none;
+    outline: none;
+    font-size: 0.9rem;
+    width: 200px;
+    padding: 4px 8px;
+    background: #F9FAFB;
+    border-radius: 4px;
+}
+
+.search-input:focus {
+    background: #F3F4F6;
+}
+
+.search-match-count {
+    font-size: 0.8rem;
+    color: #6B7280;
+    min-width: 70px;
+    text-align: center;
+}
+
+.search-nav-btn,
+.search-close-btn {
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #374151;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-nav-btn:hover,
+.search-close-btn:hover {
+    background: #F3F4F6;
+    border-color: #D1D5DB;
+}
+
+.search-nav-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.search-case-toggle {
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #9CA3AF;
+    transition: all 0.15s ease;
+}
+
+.search-case-toggle:hover {
+    background: #F3F4F6;
+}
+
+.search-case-toggle.active {
+    background: #3B82F6;
+    border-color: #3B82F6;
+    color: white;
+}
+
+/* Highlighted Search Results */
+.search-highlight {
+    background-color: #FEF3C7;
+    border-radius: 2px;
+    padding: 1px 2px;
+    margin: 0 -2px;
+}
+
+.search-highlight-current {
+    background-color: #FDBA74;
+    outline: 2px solid #F97316;
+}
+
+/* Ensure tab content has relative positioning for search bar */
+.tab-content {
+    position: relative;
+}
+
+/* Ensure transcription content areas can scroll to highlights */
+.transcription-text,
+.transcription-srt,
+.transcription-srt-continuous {
+    scroll-behavior: smooth;
+}

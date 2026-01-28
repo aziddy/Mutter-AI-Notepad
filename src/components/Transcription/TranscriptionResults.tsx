@@ -1,11 +1,14 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useAppContext, getCurrentTranscriptionAIState } from '../../contexts/AppContext';
 import { useElectron } from '../../hooks/useElectron';
+import { useTextSearch } from '../../hooks/useTextSearch';
 import AudioPlayer, { AudioPlayerRef } from '../Audio/AudioPlayer';
 import SRTViewer from './SRTViewer';
 import LocalAISection from '../AI/LocalAISection';
 import APISection from '../AI/APISection';
 import AIResults from '../AI/AIResults';
+import SearchBar from '../Search/SearchBar';
+import HighlightedText from '../Search/HighlightedText';
 import { SRTEntry } from '../../types';
 
 // Parse SRT content into structured entries
@@ -79,6 +82,52 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
 
   // Text view mode state
   const [textViewMode, setTextViewMode] = useState<'plain' | 'speakers'>('plain');
+
+  // Compute searchable text based on current view
+  const searchableText = useMemo(() => {
+    if (state.activeTab === 'srt') {
+      return state.srtEntries.map(e => e.text).join(' ');
+    } else if (textViewMode === 'speakers' && state.currentJsonData?.speakerSegments?.length) {
+      // Generate speaker transcript inline for search
+      const segments = state.currentJsonData.speakerSegments;
+      const lines: string[] = [];
+      let currentSpeaker: string | null = null;
+      let currentText: string[] = [];
+
+      for (const segment of segments) {
+        const speaker = segment.speaker || 'UNKNOWN';
+        if (speaker !== currentSpeaker) {
+          if (currentSpeaker && currentText.length > 0) {
+            lines.push(`[${currentSpeaker}] ${currentText.join(' ')}`);
+          }
+          currentSpeaker = speaker;
+          currentText = [segment.text.trim()];
+        } else {
+          currentText.push(segment.text.trim());
+        }
+      }
+      if (currentSpeaker && currentText.length > 0) {
+        lines.push(`[${currentSpeaker}] ${currentText.join(' ')}`);
+      }
+      return lines.join('\n');
+    }
+    return state.currentTranscription || '';
+  }, [state.activeTab, state.srtEntries, textViewMode, state.currentJsonData?.speakerSegments, state.currentTranscription]);
+
+  // Text search functionality
+  const search = useTextSearch(searchableText);
+
+  // Scroll to current match when it changes
+  useEffect(() => {
+    if (search.isSearchOpen && search.totalMatches > 0) {
+      const matchElement = document.querySelector(
+        `[data-match-index="${search.currentMatchIndex}"]`
+      );
+      if (matchElement) {
+        matchElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [search.currentMatchIndex, search.isSearchOpen, search.totalMatches]);
 
   // Generate formatted speaker transcript from speakerSegments
   const generateSpeakerTranscript = useCallback(() => {
@@ -309,6 +358,19 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
         </div>
 
         <div className={`tab-content ${state.activeTab === 'text' ? 'active' : ''}`}>
+          {/* Search Bar */}
+          <SearchBar
+            isOpen={search.isSearchOpen}
+            searchQuery={search.searchQuery}
+            onSearchChange={search.setSearchQuery}
+            onClose={search.closeSearch}
+            onNext={search.goToNextMatch}
+            onPrevious={search.goToPreviousMatch}
+            currentMatch={search.currentMatchIndex}
+            totalMatches={search.totalMatches}
+            caseSensitive={search.caseSensitive}
+            onToggleCaseSensitive={search.toggleCaseSensitivity}
+          />
           {/* View mode selector (only when speakers available) */}
           {state.currentJsonData?.speakerSegments && state.currentJsonData.speakerSegments.length > 0 && (
             <div className="text-view-mode-select">
@@ -324,14 +386,39 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
             </div>
           )}
           <div className="transcription-text">
-            {textViewMode === 'speakers' && state.currentJsonData?.speakerSegments && state.currentJsonData.speakerSegments.length > 0
-              ? generateSpeakerTranscript()
-              : state.currentTranscription
-            }
+            {search.isSearchOpen && search.searchQuery ? (
+              <HighlightedText
+                text={textViewMode === 'speakers' && state.currentJsonData?.speakerSegments && state.currentJsonData.speakerSegments.length > 0
+                  ? generateSpeakerTranscript()
+                  : state.currentTranscription || ''
+                }
+                searchQuery={search.searchQuery}
+                caseSensitive={search.caseSensitive}
+                currentMatchGlobalIndex={search.currentMatchIndex}
+                matchStartIndex={0}
+              />
+            ) : (
+              textViewMode === 'speakers' && state.currentJsonData?.speakerSegments && state.currentJsonData.speakerSegments.length > 0
+                ? generateSpeakerTranscript()
+                : state.currentTranscription
+            )}
           </div>
         </div>
 
         <div className={`tab-content ${state.activeTab === 'srt' ? 'active' : ''}`}>
+          {/* Search Bar */}
+          <SearchBar
+            isOpen={search.isSearchOpen}
+            searchQuery={search.searchQuery}
+            onSearchChange={search.setSearchQuery}
+            onClose={search.closeSearch}
+            onNext={search.goToNextMatch}
+            onPrevious={search.goToPreviousMatch}
+            currentMatch={search.currentMatchIndex}
+            totalMatches={search.totalMatches}
+            caseSensitive={search.caseSensitive}
+            onToggleCaseSensitive={search.toggleCaseSensitivity}
+          />
           {/* Audio Player and View Mode Select */}
           <div className="srt-controls">
             {state.currentJsonData?.metadata?.audioSourceFile && state.activeTab === 'srt' && (
@@ -362,6 +449,9 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
             onEntryClick={handleSRTEntryClick}
             viewMode={srtViewMode}
             speakerSegments={state.currentJsonData?.speakerSegments}
+            searchQuery={search.isSearchOpen ? search.searchQuery : undefined}
+            caseSensitive={search.caseSensitive}
+            currentMatchIndex={search.currentMatchIndex}
           />
         </div>
       </div>

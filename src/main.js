@@ -460,7 +460,7 @@ ipcMain.handle('update-transcription-name', async (event, folderName, newName) =
     const folderPath = path.join(transcriptionsDir, folderName);
     
     // Check if folder exists
-    if (!fs.existsSync(folderPath)) {
+    if (!fsSync.existsSync(folderPath)) {
       throw new Error('Transcription folder not found');
     }
     
@@ -496,6 +496,44 @@ ipcMain.handle('update-transcription-name', async (event, folderName, newName) =
   } catch (error) {
     console.error('Error updating transcription name:', error);
     throw new Error(`Failed to update transcription name: ${error.message}`);
+  }
+});
+
+ipcMain.handle('update-speaker-names', async (event, folderName, speakerNames) => {
+  try {
+    const transcriptionsDir = path.join(process.cwd(), 'transcriptions');
+    const folderPath = path.join(transcriptionsDir, folderName);
+
+    if (!fsSync.existsSync(folderPath)) {
+      throw new Error('Transcription folder not found');
+    }
+
+    const files = await fs.readdir(folderPath);
+    let jsonFile = null;
+
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        jsonFile = file;
+        break;
+      }
+    }
+
+    if (!jsonFile) {
+      throw new Error('No JSON metadata file found');
+    }
+
+    const jsonPath = path.join(folderPath, jsonFile);
+    const jsonContent = await fs.readFile(jsonPath, 'utf-8');
+    const jsonData = JSON.parse(jsonContent);
+
+    jsonData.speakerNames = speakerNames;
+
+    await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2));
+
+    return { success: true, message: 'Speaker names updated successfully' };
+  } catch (error) {
+    console.error('Error updating speaker names:', error);
+    throw new Error(`Failed to update speaker names: ${error.message}`);
   }
 });
 

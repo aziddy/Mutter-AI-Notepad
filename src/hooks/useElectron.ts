@@ -127,6 +127,13 @@ export const useElectron = () => {
     return await window.electronAPI.updateTranscriptionName(folderName, newName);
   }, []);
 
+  const updateSpeakerNames = useCallback(async (folderName: string, speakerNames: Record<string, string>) => {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return await window.electronAPI.updateSpeakerNames(folderName, speakerNames);
+  }, []);
+
   // User preferences operations
   const getUserPreferences = useCallback(async (): Promise<UserPreferences> => {
     if (!window.electronAPI) {
@@ -212,6 +219,7 @@ export const useElectron = () => {
     // Transcription management
     getTranscriptions,
     updateTranscriptionName,
+    updateSpeakerNames,
 
     // User preferences
     getUserPreferences,

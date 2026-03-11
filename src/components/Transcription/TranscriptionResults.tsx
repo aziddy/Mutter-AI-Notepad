@@ -4,6 +4,7 @@ import { useElectron } from '../../hooks/useElectron';
 import { useTextSearch } from '../../hooks/useTextSearch';
 import AudioPlayer, { AudioPlayerRef } from '../Audio/AudioPlayer';
 import SRTViewer from './SRTViewer';
+import SpeakerRenamePanel from './SpeakerRenamePanel';
 import LocalAISection from '../AI/LocalAISection';
 import APISection from '../AI/APISection';
 import AIResults from '../AI/AIResults';
@@ -46,7 +47,7 @@ interface TranscriptionResultsProps {
 
 const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsClick }) => {
   const { state, dispatch } = useAppContext();
-  const { getUserPreferences, updateUserPreferences } = useElectron();
+  const { getUserPreferences, updateUserPreferences, updateSpeakerNames } = useElectron();
 
   // Ref for AudioPlayer to enable seeking from SRT entry clicks
   const audioPlayerRef = useRef<AudioPlayerRef>(null);
@@ -83,6 +84,14 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
   // Text view mode state
   const [textViewMode, setTextViewMode] = useState<'plain' | 'speakers'>('plain');
 
+  // Speaker rename panel state
+  const [showSpeakerRename, setShowSpeakerRename] = useState(false);
+
+  // Resolve speaker name from mapping
+  const resolveSpeakerName = useCallback((speakerId: string): string => {
+    return state.currentJsonData?.speakerNames?.[speakerId] || speakerId;
+  }, [state.currentJsonData?.speakerNames]);
+
   // Compute searchable text based on current view
   const searchableText = useMemo(() => {
     if (state.activeTab === 'srt') {
@@ -98,7 +107,7 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
         const speaker = segment.speaker || 'UNKNOWN';
         if (speaker !== currentSpeaker) {
           if (currentSpeaker && currentText.length > 0) {
-            lines.push(`[${currentSpeaker}] ${currentText.join(' ')}`);
+            lines.push(`[${resolveSpeakerName(currentSpeaker)}] ${currentText.join(' ')}`);
           }
           currentSpeaker = speaker;
           currentText = [segment.text.trim()];
@@ -107,12 +116,12 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
         }
       }
       if (currentSpeaker && currentText.length > 0) {
-        lines.push(`[${currentSpeaker}] ${currentText.join(' ')}`);
+        lines.push(`[${resolveSpeakerName(currentSpeaker)}] ${currentText.join(' ')}`);
       }
       return lines.join('\n');
     }
     return state.currentTranscription || '';
-  }, [state.activeTab, state.srtEntries, textViewMode, state.currentJsonData?.speakerSegments, state.currentTranscription]);
+  }, [state.activeTab, state.srtEntries, textViewMode, state.currentJsonData?.speakerSegments, state.currentTranscription, resolveSpeakerName]);
 
   // Text search functionality
   const search = useTextSearch(searchableText);
@@ -142,7 +151,7 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
       const speaker = segment.speaker || 'UNKNOWN';
       if (speaker !== currentSpeaker) {
         if (currentSpeaker && currentText.length > 0) {
-          lines.push(`[${currentSpeaker}] ${currentText.join(' ')}`);
+          lines.push(`[${resolveSpeakerName(currentSpeaker)}] ${currentText.join(' ')}`);
         }
         currentSpeaker = speaker;
         currentText = [segment.text.trim()];
@@ -151,10 +160,10 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
       }
     }
     if (currentSpeaker && currentText.length > 0) {
-      lines.push(`[${currentSpeaker}] ${currentText.join(' ')}`);
+      lines.push(`[${resolveSpeakerName(currentSpeaker)}] ${currentText.join(' ')}`);
     }
     return lines.join('\n');
-  }, [state.currentJsonData?.speakerSegments]);
+  }, [state.currentJsonData?.speakerSegments, resolveSpeakerName]);
 
   // Load user preferences on mount
   useEffect(() => {
@@ -268,6 +277,30 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
     onSettingsClick?.();
   }, [onSettingsClick]);
 
+  // Handle speaker rename save
+  const handleSpeakerNamesSave = useCallback(async (names: Record<string, string>) => {
+    const folderPath = state.transcriptions.find(
+      t => t.fileName === state.currentTranscriptionId
+    )?.folderPath;
+    const folderName = folderPath?.split(/[\\/]/).pop();
+    if (!folderName) return;
+
+    try {
+      await updateSpeakerNames(folderName, names);
+      dispatch({ type: 'SET_SPEAKER_NAMES', payload: names });
+      setShowSpeakerRename(false);
+      dispatch({
+        type: 'ADD_TOAST',
+        payload: { id: Date.now().toString(), message: 'Speaker names updated!', type: 'success' }
+      });
+    } catch (error) {
+      dispatch({
+        type: 'ADD_TOAST',
+        payload: { id: Date.now().toString(), message: 'Failed to update speaker names', type: 'error' }
+      });
+    }
+  }, [state.transcriptions, state.currentTranscriptionId, updateSpeakerNames, dispatch]);
+
   // Handle AI panel collapse toggle
   const handleToggleAIPanel = useCallback(() => {
     setIsAIPanelCollapsed(!isAIPanelCollapsed);
@@ -332,9 +365,24 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
               <div className="metadata-item">
                 <i className="fas fa-users"></i>
                 <span>Speakers: {state.currentJsonData.speakers.length}</span>
+                <button
+                  className="speaker-rename-btn"
+                  onClick={() => setShowSpeakerRename(!showSpeakerRename)}
+                  title="Rename speakers"
+                >
+                  <i className="fas fa-pen"></i>
+                </button>
               </div>
             )}
           </div>
+          {showSpeakerRename && state.currentJsonData.speakers && state.currentJsonData.speakers.length > 0 && (
+            <SpeakerRenamePanel
+              speakers={state.currentJsonData.speakers}
+              speakerNames={state.currentJsonData.speakerNames || {}}
+              onSave={handleSpeakerNamesSave}
+              onClose={() => setShowSpeakerRename(false)}
+            />
+          )}
         </div>
       )}
 
@@ -449,6 +497,7 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
             onEntryClick={handleSRTEntryClick}
             viewMode={srtViewMode}
             speakerSegments={state.currentJsonData?.speakerSegments}
+            speakerNames={state.currentJsonData?.speakerNames}
             searchQuery={search.isSearchOpen ? search.searchQuery : undefined}
             caseSensitive={search.caseSensitive}
             currentMatchIndex={search.currentMatchIndex}

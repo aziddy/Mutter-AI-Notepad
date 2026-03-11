@@ -2396,3 +2396,125 @@ body {
 .transcription-srt-continuous {
     scroll-behavior: smooth;
 }
+
+/* Speaker Rename Panel */
+.speaker-rename-panel {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 8px;
+}
+
+.speaker-rename-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.speaker-rename-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.speaker-rename-close {
+    background: none;
+    border: none;
+    color: #9CA3AF;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.speaker-rename-close:hover {
+    color: #6B7280;
+    background: #E5E7EB;
+}
+
+.speaker-rename-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.speaker-rename-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.speaker-color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.speaker-original-id {
+    font-size: 0.8rem;
+    color: #6B7280;
+    min-width: 90px;
+    font-family: monospace;
+}
+
+.speaker-rename-arrow {
+    color: #9CA3AF;
+    font-size: 0.7rem;
+}
+
+.speaker-name-input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid #D1D5DB;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: #374151;
+    background: white;
+    outline: none;
+}
+
+.speaker-name-input:focus {
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.speaker-name-input::placeholder {
+    color: #9CA3AF;
+}
+
+.speaker-rename-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.speaker-rename-save {
+    padding: 4px 14px;
+    background: #3B82F6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.speaker-rename-save:hover {
+    background: #2563EB;
+}
+
+.speaker-rename-btn {
+    background: none;
+    border: none;
+    color: #9CA3AF;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.speaker-rename-btn:hover {
+    color: #3B82F6;
+    background: #EFF6FF;
+}

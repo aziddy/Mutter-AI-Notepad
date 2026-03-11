@@ -20,6 +20,7 @@ interface SRTViewerProps {
   onEntryClick: (entry: SRTEntry) => void;
   viewMode?: 'segmented' | 'continuous';
   speakerSegments?: SpeakerSegment[];
+  speakerNames?: Record<string, string>;
   // Search props
   searchQuery?: string;
   caseSensitive?: boolean;
@@ -32,6 +33,7 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
   onEntryClick,
   viewMode = 'segmented',
   speakerSegments,
+  speakerNames,
   searchQuery,
   caseSensitive = false,
   currentMatchIndex = 0,
@@ -187,7 +189,7 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
               ref={isPlaying ? playingEntryRef : null}
               className={`srt-continuous-entry ${isPlaying ? 'playing' : ''}`}
               onClick={() => handleEntryClick(entry)}
-              title={`${formatTime(entry.startTime)} - ${formatTime(entry.endTime)}${speaker ? ` (${speaker})` : ''}`}
+              title={`${formatTime(entry.startTime)} - ${formatTime(entry.endTime)}${speaker ? ` (${speakerNames?.[speaker] || speaker})` : ''}`}
               style={color ? { backgroundColor: `${color}20`, borderRadius: '2px', padding: '2px 4px' } : undefined}
             >
               {searchQuery ? (
@@ -229,7 +231,7 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
                   className="srt-speaker-label"
                   style={{ backgroundColor: color }}
                 >
-                  {speaker}
+                  {speakerNames?.[speaker] || speaker}
                 </span>
               )}
               <span className="srt-entry-number">#{index + 1}</span>

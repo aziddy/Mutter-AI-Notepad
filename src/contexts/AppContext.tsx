@@ -52,6 +52,7 @@ type AppAction =
   | { type: 'SET_TRANSCRIPTION_CONTEXT'; payload: { transcriptionId: string; hasContext: boolean } }
   | { type: 'SET_TRANSCRIPTION_AI_RESULTS'; payload: { transcriptionId: string; title: string; content: string } }
   | { type: 'HIDE_TRANSCRIPTION_AI_RESULTS'; payload: { transcriptionId: string } }
+  | { type: 'SET_SPEAKER_NAMES'; payload: Record<string, string> }
   | { type: 'ADD_TOAST'; payload: ToastMessage }
   | { type: 'REMOVE_TOAST'; payload: string };
 
@@ -268,6 +269,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
               }
             : transcription
         ),
+      };
+
+    case 'SET_SPEAKER_NAMES':
+      return {
+        ...state,
+        currentJsonData: state.currentJsonData
+          ? { ...state.currentJsonData, speakerNames: action.payload }
+          : state.currentJsonData,
       };
 
     case 'ADD_TOAST':

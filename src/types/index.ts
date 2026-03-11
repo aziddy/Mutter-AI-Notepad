@@ -33,6 +33,7 @@ export interface TranscriptionJsonData {
   // Speaker diarization data (optional)
   speakers?: string[];
   speakerSegments?: SpeakerSegment[];
+  speakerNames?: Record<string, string>;
   diarizationMetadata?: {
     backend: string;
     processingTimeSeconds: number;
@@ -220,6 +221,10 @@ export interface ElectronAPI {
   // Transcription management
   getTranscriptions: () => Promise<TranscriptionData[]>;
   updateTranscriptionName: (folderName: string, newName: string) => Promise<{
+    success: boolean;
+    message: string;
+  }>;
+  updateSpeakerNames: (folderName: string, speakerNames: Record<string, string>) => Promise<{
     success: boolean;
     message: string;
   }>;

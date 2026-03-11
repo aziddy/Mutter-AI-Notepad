@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { TranscriptionData, LLMStatus, TabType, ToastMessage, SRTEntry, TranscriptionAIState } from '../types';
+import { TranscriptionData, LLMStatus, TabType, ToastMessage, SRTEntry, TranscriptionAIState, SpeakerSegment } from '../types';
 
 // State interface
 interface AppState {
@@ -53,6 +53,7 @@ type AppAction =
   | { type: 'SET_TRANSCRIPTION_AI_RESULTS'; payload: { transcriptionId: string; title: string; content: string } }
   | { type: 'HIDE_TRANSCRIPTION_AI_RESULTS'; payload: { transcriptionId: string } }
   | { type: 'SET_SPEAKER_NAMES'; payload: Record<string, string> }
+  | { type: 'UPDATE_SPEAKER_SEGMENTS'; payload: SpeakerSegment[] }
   | { type: 'ADD_TOAST'; payload: ToastMessage }
   | { type: 'REMOVE_TOAST'; payload: string };
 
@@ -276,6 +277,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         currentJsonData: state.currentJsonData
           ? { ...state.currentJsonData, speakerNames: action.payload }
+          : state.currentJsonData,
+      };
+
+    case 'UPDATE_SPEAKER_SEGMENTS':
+      return {
+        ...state,
+        currentJsonData: state.currentJsonData
+          ? { ...state.currentJsonData, speakerSegments: action.payload }
           : state.currentJsonData,
       };
 

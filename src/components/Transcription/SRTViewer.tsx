@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
 import { SRTEntry, SpeakerSegment } from '../../types';
 import HighlightedText from '../Search/HighlightedText';
 
@@ -21,6 +21,8 @@ interface SRTViewerProps {
   viewMode?: 'segmented' | 'continuous';
   speakerSegments?: SpeakerSegment[];
   speakerNames?: Record<string, string>;
+  speakers?: string[];
+  onSpeakerChange?: (entryStartTime: number, entryEndTime: number, newSpeaker: string) => void;
   // Search props
   searchQuery?: string;
   caseSensitive?: boolean;
@@ -34,6 +36,8 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
   viewMode = 'segmented',
   speakerSegments,
   speakerNames,
+  speakers,
+  onSpeakerChange,
   searchQuery,
   caseSensitive = false,
   currentMatchIndex = 0,
@@ -44,18 +48,20 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
   // Generate speaker color map
   const speakerColors = useMemo(() => {
     if (!speakerSegments || speakerSegments.length === 0) return {};
-    const uniqueSpeakers = [...new Set(speakerSegments.map(s => s.speaker).filter(Boolean))];
+    const uniqueSpeakers = speakers && speakers.length > 0
+      ? speakers
+      : [...new Set(speakerSegments.map(s => s.speaker).filter(Boolean))];
     const colorMap: Record<string, string> = {};
     uniqueSpeakers.forEach((speaker, index) => {
       colorMap[speaker] = SPEAKER_COLORS[index % SPEAKER_COLORS.length];
     });
     return colorMap;
-  }, [speakerSegments]);
+  }, [speakerSegments, speakers]);
 
   // Find speaker for a given time range
-  const findSpeakerForEntry = useCallback((startTime: number, endTime: number): { speaker: string | null; color: string | null } => {
+  const findSpeakerForEntry = useCallback((startTime: number, endTime: number): { speaker: string | null; color: string | null; isReassigned: boolean } => {
     if (!speakerSegments || speakerSegments.length === 0) {
-      return { speaker: null, color: null };
+      return { speaker: null, color: null, isReassigned: false };
     }
     // Find the segment with the most overlap
     let bestMatch: SpeakerSegment | null = null;
@@ -70,10 +76,56 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
       }
     }
     if (bestMatch && bestMatch.speaker) {
-      return { speaker: bestMatch.speaker, color: speakerColors[bestMatch.speaker] || null };
+      const isReassigned = !!bestMatch.originalSpeaker && bestMatch.originalSpeaker !== bestMatch.speaker;
+      return { speaker: bestMatch.speaker, color: speakerColors[bestMatch.speaker] || null, isReassigned };
     }
-    return { speaker: null, color: null };
+    return { speaker: null, color: null, isReassigned: false };
   }, [speakerSegments, speakerColors]);
+
+  // Speaker dropdown state
+  const [speakerDropdown, setSpeakerDropdown] = useState<{
+    entryIndex: number;
+    startTime: number;
+    endTime: number;
+    currentSpeaker: string;
+  } | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Open dropdown on speaker label click
+  const handleSpeakerLabelClick = useCallback((e: React.MouseEvent, entryIndex: number, entry: SRTEntry, currentSpeaker: string) => {
+    e.stopPropagation();
+    if (!speakers || speakers.length < 2 || !onSpeakerChange) return;
+    setSpeakerDropdown(prev =>
+      prev?.entryIndex === entryIndex ? null : { entryIndex, startTime: entry.startTime, endTime: entry.endTime, currentSpeaker }
+    );
+  }, [speakers, onSpeakerChange]);
+
+  // Select speaker from dropdown
+  const handleDropdownSelect = useCallback((e: React.MouseEvent, newSpeaker: string) => {
+    e.stopPropagation();
+    if (!speakerDropdown || !onSpeakerChange) return;
+    onSpeakerChange(speakerDropdown.startTime, speakerDropdown.endTime, newSpeaker);
+    setSpeakerDropdown(null);
+  }, [speakerDropdown, onSpeakerChange]);
+
+  // Close dropdown on click outside or Escape
+  useEffect(() => {
+    if (!speakerDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setSpeakerDropdown(null);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSpeakerDropdown(null);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [speakerDropdown]);
   // Parse SRT content into entries
   const srtEntries = useMemo(() => {
     if (!srtContent) return [];
@@ -217,7 +269,7 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
         const isPlaying = currentPlayingEntry &&
           currentPlayingEntry.startTime === entry.startTime &&
           currentPlayingEntry.endTime === entry.endTime;
-        const { speaker, color } = findSpeakerForEntry(entry.startTime, entry.endTime);
+        const { speaker, color, isReassigned } = findSpeakerForEntry(entry.startTime, entry.endTime);
 
         return (
           <div
@@ -227,11 +279,30 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
           >
             <div className="srt-entry-header">
               {speaker && color && (
-                <span
-                  className="srt-speaker-label"
-                  style={{ backgroundColor: color }}
-                >
-                  {speakerNames?.[speaker] || speaker}
+                <span className="srt-speaker-label-wrapper" ref={speakerDropdown?.entryIndex === index ? dropdownRef : undefined}>
+                  <span
+                    className={`srt-speaker-label ${onSpeakerChange ? 'srt-speaker-label-clickable' : ''} ${isReassigned ? 'srt-speaker-label-reassigned' : ''}`}
+                    style={{ backgroundColor: color }}
+                    onClick={onSpeakerChange ? (e) => handleSpeakerLabelClick(e, index, entry, speaker) : undefined}
+                    title={onSpeakerChange ? 'Click to change speaker' : undefined}
+                  >
+                    {speakerNames?.[speaker] || speaker}
+                    {isReassigned && <i className="fas fa-pen srt-speaker-edited-icon"></i>}
+                  </span>
+                  {speakerDropdown?.entryIndex === index && speakers && (
+                    <div className="srt-speaker-dropdown">
+                      {speakers.map((s, si) => (
+                        <div
+                          key={s}
+                          className={`srt-speaker-dropdown-item ${s === speaker ? 'active' : ''}`}
+                          onClick={(e) => s !== speaker ? handleDropdownSelect(e, s) : e.stopPropagation()}
+                        >
+                          <span className="speaker-color-dot" style={{ backgroundColor: SPEAKER_COLORS[si % SPEAKER_COLORS.length] }} />
+                          <span>{speakerNames?.[s] || s}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </span>
               )}
               <span className="srt-entry-number">#{index + 1}</span>

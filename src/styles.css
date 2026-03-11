@@ -2518,3 +2518,67 @@ body {
     color: #3B82F6;
     background: #EFF6FF;
 }
+
+/* Speaker label click-to-cycle */
+.srt-speaker-label-clickable {
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.15s;
+}
+
+.srt-speaker-label-clickable:hover {
+    opacity: 0.85;
+    transform: scale(1.05);
+}
+
+.srt-speaker-label-reassigned {
+    outline: 2px dashed rgba(255, 255, 255, 0.6);
+    outline-offset: 1px;
+}
+
+.srt-speaker-edited-icon {
+    margin-left: 4px;
+    font-size: 0.6rem;
+    opacity: 0.8;
+}
+
+/* Speaker label wrapper for dropdown positioning */
+.srt-speaker-label-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+/* Speaker dropdown menu */
+.srt-speaker-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background: white;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 50;
+    min-width: 140px;
+    padding: 4px 0;
+}
+
+.srt-speaker-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    color: #374151;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.srt-speaker-dropdown-item:hover {
+    background: #F3F4F6;
+}
+
+.srt-speaker-dropdown-item.active {
+    background: #EFF6FF;
+    font-weight: 600;
+    cursor: default;
+}

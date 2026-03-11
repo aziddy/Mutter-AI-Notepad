@@ -134,6 +134,13 @@ export const useElectron = () => {
     return await window.electronAPI.updateSpeakerNames(folderName, speakerNames);
   }, []);
 
+  const updateSpeakerSegments = useCallback(async (folderName: string, speakerSegments: import('../types').SpeakerSegment[]) => {
+    if (!window.electronAPI) {
+      throw new Error('Electron API not available');
+    }
+    return await window.electronAPI.updateSpeakerSegments(folderName, speakerSegments);
+  }, []);
+
   // User preferences operations
   const getUserPreferences = useCallback(async (): Promise<UserPreferences> => {
     if (!window.electronAPI) {
@@ -220,6 +227,7 @@ export const useElectron = () => {
     getTranscriptions,
     updateTranscriptionName,
     updateSpeakerNames,
+    updateSpeakerSegments,
 
     // User preferences
     getUserPreferences,

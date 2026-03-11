@@ -47,7 +47,7 @@ interface TranscriptionResultsProps {
 
 const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsClick }) => {
   const { state, dispatch } = useAppContext();
-  const { getUserPreferences, updateUserPreferences, updateSpeakerNames } = useElectron();
+  const { getUserPreferences, updateUserPreferences, updateSpeakerNames, updateSpeakerSegments } = useElectron();
 
   // Ref for AudioPlayer to enable seeking from SRT entry clicks
   const audioPlayerRef = useRef<AudioPlayerRef>(null);
@@ -301,6 +301,41 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
     }
   }, [state.transcriptions, state.currentTranscriptionId, updateSpeakerNames, dispatch]);
 
+  // Handle speaker reassignment for an SRT entry
+  const handleSpeakerChange = useCallback(async (entryStartTime: number, entryEndTime: number, newSpeaker: string) => {
+    const segments = state.currentJsonData?.speakerSegments;
+    if (!segments) return;
+
+    const updatedSegments = segments.map((seg: { speaker: string; originalSpeaker?: string; start: number; end: number }) => {
+      // Find segments that overlap this SRT entry
+      const overlapStart = Math.max(entryStartTime, seg.start);
+      const overlapEnd = Math.min(entryEndTime, seg.end);
+      if (overlapEnd > overlapStart) {
+        return {
+          ...seg,
+          originalSpeaker: seg.originalSpeaker ?? seg.speaker,
+          speaker: newSpeaker,
+        };
+      }
+      return seg;
+    });
+
+    dispatch({ type: 'UPDATE_SPEAKER_SEGMENTS', payload: updatedSegments });
+
+    // Persist to disk
+    const folderPath = state.transcriptions.find(
+      t => t.fileName === state.currentTranscriptionId
+    )?.folderPath;
+    const folderName = folderPath?.split(/[\\/]/).pop();
+    if (folderName) {
+      try {
+        await updateSpeakerSegments(folderName, updatedSegments);
+      } catch (error) {
+        console.error('Failed to persist speaker segment change:', error);
+      }
+    }
+  }, [state.currentJsonData?.speakerSegments, state.transcriptions, state.currentTranscriptionId, updateSpeakerSegments, dispatch]);
+
   // Handle AI panel collapse toggle
   const handleToggleAIPanel = useCallback(() => {
     setIsAIPanelCollapsed(!isAIPanelCollapsed);
@@ -498,6 +533,8 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
             viewMode={srtViewMode}
             speakerSegments={state.currentJsonData?.speakerSegments}
             speakerNames={state.currentJsonData?.speakerNames}
+            speakers={state.currentJsonData?.speakers}
+            onSpeakerChange={handleSpeakerChange}
             searchQuery={search.isSearchOpen ? search.searchQuery : undefined}
             caseSensitive={search.caseSensitive}
             currentMatchIndex={search.currentMatchIndex}

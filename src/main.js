@@ -537,6 +537,44 @@ ipcMain.handle('update-speaker-names', async (event, folderName, speakerNames) =
   }
 });
 
+ipcMain.handle('update-speaker-segments', async (event, folderName, speakerSegments) => {
+  try {
+    const transcriptionsDir = path.join(process.cwd(), 'transcriptions');
+    const folderPath = path.join(transcriptionsDir, folderName);
+
+    if (!fsSync.existsSync(folderPath)) {
+      throw new Error('Transcription folder not found');
+    }
+
+    const files = await fs.readdir(folderPath);
+    let jsonFile = null;
+
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        jsonFile = file;
+        break;
+      }
+    }
+
+    if (!jsonFile) {
+      throw new Error('No JSON metadata file found');
+    }
+
+    const jsonPath = path.join(folderPath, jsonFile);
+    const jsonContent = await fs.readFile(jsonPath, 'utf-8');
+    const jsonData = JSON.parse(jsonContent);
+
+    jsonData.speakerSegments = speakerSegments;
+
+    await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2));
+
+    return { success: true, message: 'Speaker segments updated successfully' };
+  } catch (error) {
+    console.error('Error updating speaker segments:', error);
+    throw new Error(`Failed to update speaker segments: ${error.message}`);
+  }
+});
+
 // Diarization Configuration Service
 const diarizationConfigService = new DiarizationConfigService();
 

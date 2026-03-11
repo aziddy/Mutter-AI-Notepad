@@ -93,6 +93,7 @@ export interface DiarizationEnvironmentCheck {
 
 export interface SpeakerSegment {
   speaker: string;
+  originalSpeaker?: string;
   start: number;
   end: number;
   text: string;
@@ -225,6 +226,10 @@ export interface ElectronAPI {
     message: string;
   }>;
   updateSpeakerNames: (folderName: string, speakerNames: Record<string, string>) => Promise<{
+    success: boolean;
+    message: string;
+  }>;
+  updateSpeakerSegments: (folderName: string, speakerSegments: SpeakerSegment[]) => Promise<{
     success: boolean;
     message: string;
   }>;

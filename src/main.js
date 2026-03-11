@@ -5,7 +5,6 @@ const fsSync = require('fs');
 const { transcribeAudio } = require('./transcription');
 const { DiarizationConfigService } = require('./diarization-config');
 const { DiarizationService } = require('../scripts/diarization/diarization-service');
-const { formatSpeakerTranscript } = require('./utils/format-speaker-transcript');
 const {
   generateSummary,
   askQuestion,
@@ -605,17 +604,14 @@ ipcMain.handle('transcribe-file-with-diarization', async (event, filePath, custo
     const srtPath = path.join(transcriptionFolder, srtFileName);
     await fs.writeFile(srtPath, srtContent);
 
-    // Generate and save formatted speaker transcript (like diarization-test-output.txt)
+    // Generate and save formatted speaker transcript with fine-grained segments
     const speakerTranscriptFileName = `${baseFileName}-speakers.txt`;
     const speakerTranscriptPath = path.join(transcriptionFolder, speakerTranscriptFileName);
-    const speakerTranscriptContent = formatSpeakerTranscript(result.segments.map(seg => ({
-      startTime: seg.start,
-      endTime: seg.end,
-      text: seg.text,
-      speaker: seg.speaker,
-      confidence: seg.confidence || 0
-    })));
-    await fs.writeFile(speakerTranscriptPath, speakerTranscriptContent);
+    const speakerTranscriptLines = result.segments.map(seg => {
+      const speaker = seg.speaker || 'UNKNOWN';
+      return `[${speaker}] ${seg.text.trim()}`;
+    });
+    await fs.writeFile(speakerTranscriptPath, speakerTranscriptLines.join('\n'));
 
     // Copy audio file to transcription folder
     const audioExt = path.extname(filePath).toLowerCase();

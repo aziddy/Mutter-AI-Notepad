@@ -196,7 +196,11 @@ class TranscriptionService {
         '-otxt',  // Output as text
         '-oj', // Output as JSON
         '-osrt', // Output as SRT
-        '-l', 'en' // Language
+        '-l', 'en', // Language
+        '-sns',  // Suppress non-speech tokens (reduces hallucinated/repeated text)
+        '-et', '2.0',  // Lower entropy threshold (fail & retry sooner on uncertain segments)
+        '-lpt', '-0.5',  // Raise log probability threshold (catch low-confidence repetitions)
+        '-bs', '8',  // Increase beam size for better accuracy
       ];
       
       console.log('Running whisper with args:', args);

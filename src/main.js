@@ -509,7 +509,9 @@ ipcMain.handle('check-diarization-environment', async (event, backend = 'fluidau
     const config = diarizationConfigService.getConfig();
     const service = new DiarizationService({
       backend: backend || config.backend,
-      hfToken: config.hfToken
+      hfToken: config.hfToken,
+      minSpeakers: config.minSpeakers || undefined,
+      maxSpeakers: config.maxSpeakers || undefined
     });
     return await service.checkEnvironment();
   } catch (error) {
@@ -553,7 +555,9 @@ ipcMain.handle('transcribe-file-with-diarization', async (event, filePath, custo
     // Create diarization service
     const diarizationService = new DiarizationService({
       backend: config.backend,
-      hfToken: config.hfToken
+      hfToken: config.hfToken,
+      minSpeakers: config.minSpeakers || undefined,
+      maxSpeakers: config.maxSpeakers || undefined
     });
 
     // Check environment

@@ -6,7 +6,9 @@ class DiarizationConfigService {
     this.config = {
       enabled: false,
       backend: 'fluidaudio', // 'fluidaudio' or 'pyannote'
-      hfToken: ''
+      hfToken: '',
+      minSpeakers: null,
+      maxSpeakers: null
     };
     this.loadConfiguration();
   }

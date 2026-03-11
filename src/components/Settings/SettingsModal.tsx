@@ -530,6 +530,41 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onConfig
                 </div>
               )}
 
+              <div className="config-field">
+                <label>Speaker Count Hints</label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="number"
+                      value={diarizationConfig?.minSpeakers ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value ? parseInt(e.target.value) : null;
+                        setDiarizationConfig(prev => prev ? { ...prev, minSpeakers: val } : null);
+                      }}
+                      min="1"
+                      max="20"
+                      placeholder="Min (auto)"
+                      className="modern-input"
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="number"
+                      value={diarizationConfig?.maxSpeakers ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value ? parseInt(e.target.value) : null;
+                        setDiarizationConfig(prev => prev ? { ...prev, maxSpeakers: val } : null);
+                      }}
+                      min="1"
+                      max="20"
+                      placeholder="Max (auto)"
+                      className="modern-input"
+                    />
+                  </div>
+                </div>
+                <span className="field-hint">Hint the expected number of speakers. Helps with video call audio where auto-detection struggles.</span>
+              </div>
+
               <div className="connection-test">
                 <button
                   className="btn btn-outline test-btn"

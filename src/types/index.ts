@@ -73,6 +73,8 @@ export interface DiarizationConfig {
   enabled: boolean;
   backend: 'fluidaudio' | 'pyannote';
   hfToken?: string;
+  minSpeakers?: number | null;
+  maxSpeakers?: number | null;
 }
 
 export interface DiarizationEnvironmentCheck {

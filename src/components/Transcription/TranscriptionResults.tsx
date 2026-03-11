@@ -47,7 +47,7 @@ interface TranscriptionResultsProps {
 
 const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsClick }) => {
   const { state, dispatch } = useAppContext();
-  const { getUserPreferences, updateUserPreferences, updateSpeakerNames, updateSpeakerSegments } = useElectron();
+  const { getUserPreferences, updateUserPreferences, updateSpeakerNames, updateSpeakerSegments, exportTranscription } = useElectron();
 
   // Ref for AudioPlayer to enable seeking from SRT entry clicks
   const audioPlayerRef = useRef<AudioPlayerRef>(null);
@@ -225,15 +225,58 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
     });
   };
 
-  const handleSaveTranscription = () => {
-    dispatch({
-      type: 'ADD_TOAST',
-      payload: {
-        id: Date.now().toString(),
-        message: 'Transcription is automatically saved!',
-        type: 'info'
+  const handleExportTranscription = async () => {
+    let content = '';
+    let suffix = '';
+
+    const segments = state.currentJsonData?.speakerSegments;
+    if (segments && segments.length > 0) {
+      // Always export in speaker transcript format with ALL CAPS names
+      const lines: string[] = [];
+      let currentSpeaker: string | null = null;
+      let currentText: string[] = [];
+
+      for (const segment of segments) {
+        const speaker = segment.speaker || 'UNKNOWN';
+        if (speaker !== currentSpeaker) {
+          if (currentSpeaker && currentText.length > 0) {
+            lines.push(`[${resolveSpeakerName(currentSpeaker).toUpperCase()}] ${currentText.join(' ')}`);
+          }
+          currentSpeaker = speaker;
+          currentText = [segment.text.trim()];
+        } else {
+          currentText.push(segment.text.trim());
+        }
       }
-    });
+      if (currentSpeaker && currentText.length > 0) {
+        lines.push(`[${resolveSpeakerName(currentSpeaker).toUpperCase()}] ${currentText.join(' ')}`);
+      }
+      content = lines.join('\n');
+      suffix = '-speakers.txt';
+    } else {
+      content = state.currentTranscription || '';
+      suffix = '.txt';
+    }
+
+    if (!content) return;
+
+    const baseName = state.currentJsonData?.metadata?.customName || 'transcription';
+    const defaultFileName = `${baseName}${suffix}`;
+
+    try {
+      const result = await exportTranscription(content, defaultFileName);
+      if (result.success) {
+        dispatch({
+          type: 'ADD_TOAST',
+          payload: { id: Date.now().toString(), message: `Exported to ${result.filePath}`, type: 'success' }
+        });
+      }
+    } catch {
+      dispatch({
+        type: 'ADD_TOAST',
+        payload: { id: Date.now().toString(), message: 'Failed to export transcription', type: 'error' }
+      });
+    }
   };
 
   // Handle SRT entry click (jump to time in audio)
@@ -355,10 +398,10 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
           </button>
           <button
             className="btn btn-icon"
-            title="Save to file"
-            onClick={handleSaveTranscription}
+            title="Export to file"
+            onClick={handleExportTranscription}
           >
-            <i className="fas fa-save"></i>
+            <i className="fas fa-file-export"></i>
           </button>
         </div>
       </div>

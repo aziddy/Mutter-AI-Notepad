@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateTranscriptionName: (folderName, newName) => ipcRenderer.invoke('update-transcription-name', folderName, newName),
   updateSpeakerNames: (folderName, speakerNames) => ipcRenderer.invoke('update-speaker-names', folderName, speakerNames),
   updateSpeakerSegments: (folderName, speakerSegments) => ipcRenderer.invoke('update-speaker-segments', folderName, speakerSegments),
+  exportTranscription: (content, defaultFileName) => ipcRenderer.invoke('export-transcription', content, defaultFileName),
 
   // LLM Management APIs
   initializeLLM: () => ipcRenderer.invoke('initialize-llm'),

@@ -575,6 +575,30 @@ ipcMain.handle('update-speaker-segments', async (event, folderName, speakerSegme
   }
 });
 
+// Export transcription to file
+ipcMain.handle('export-transcription', async (event, content, defaultFileName) => {
+  try {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: defaultFileName || 'transcription-export.txt',
+      filters: [
+        { name: 'Text Files', extensions: ['txt'] },
+        { name: 'SRT Files', extensions: ['srt'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (canceled || !filePath) {
+      return { success: false };
+    }
+
+    fsSync.writeFileSync(filePath, content, 'utf-8');
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('Error exporting transcription:', error);
+    throw new Error(`Failed to export transcription: ${error.message}`);
+  }
+});
+
 // Diarization Configuration Service
 const diarizationConfigService = new DiarizationConfigService();
 

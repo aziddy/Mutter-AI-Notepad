@@ -234,6 +234,12 @@ export interface ElectronAPI {
     message: string;
   }>;
 
+  // Export
+  exportTranscription: (content: string, defaultFileName: string) => Promise<{
+    success: boolean;
+    filePath?: string;
+  }>;
+
   // User preferences management
   getUserPreferences: () => Promise<UserPreferences>;
   updateUserPreferences: (preferences: Partial<UserPreferences>) => Promise<{

@@ -152,8 +152,153 @@ function smoothSpeakerAssignments(segments, confidenceThreshold = 0.5) {
 }
 
 /**
+ * Split a whisper segment at speaker boundaries when multiple speakers overlap.
+ * Distributes text proportionally by duration, splitting at word boundaries.
+ * @param {WhisperSegment} whisperSeg - A single whisper segment
+ * @param {SpeakerSegment[]} speakerSegments - Speaker segments from diarization
+ * @returns {AlignedSegment[]}
+ */
+function splitAtSpeakerBoundaries(whisperSeg, speakerSegments) {
+  // Find all speaker segments that overlap this whisper segment
+  const overlapping = speakerSegments.filter(
+    (s) => calculateOverlap(whisperSeg.start, whisperSeg.end, s.start, s.end) > 0
+  );
+
+  if (overlapping.length === 0) {
+    return [{
+      start: whisperSeg.start,
+      end: whisperSeg.end,
+      text: whisperSeg.text.trim(),
+      speaker: 'UNKNOWN',
+      confidence: 0,
+    }];
+  }
+
+  // Check if all overlapping segments have the same speaker
+  const uniqueSpeakers = new Set(overlapping.map((s) => s.speaker));
+  if (uniqueSpeakers.size === 1) {
+    const speaker = overlapping[0].speaker;
+    const overlap = overlapping.reduce(
+      (sum, s) => sum + calculateOverlap(whisperSeg.start, whisperSeg.end, s.start, s.end),
+      0
+    );
+    const duration = whisperSeg.end - whisperSeg.start;
+    return [{
+      start: whisperSeg.start,
+      end: whisperSeg.end,
+      text: whisperSeg.text.trim(),
+      speaker,
+      confidence: duration > 0 ? overlap / duration : 0,
+    }];
+  }
+
+  // Multiple speakers overlap - split at speaker transition boundaries
+  // Sort overlapping segments by start time
+  const sorted = [...overlapping].sort((a, b) => a.start - b.start);
+
+  // Build split points from speaker boundaries within this whisper segment
+  const splitPoints = [whisperSeg.start];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const curr = sorted[i];
+    const next = sorted[i + 1];
+    if (curr.speaker !== next.speaker) {
+      // Speaker transition - use the boundary between segments
+      const boundary = (curr.end + next.start) / 2;
+      const clampedBoundary = Math.max(whisperSeg.start, Math.min(whisperSeg.end, boundary));
+      if (clampedBoundary > splitPoints[splitPoints.length - 1] + 0.05) {
+        splitPoints.push(clampedBoundary);
+      }
+    }
+  }
+  splitPoints.push(whisperSeg.end);
+
+  if (splitPoints.length <= 2) {
+    // No meaningful split points found, assign best speaker
+    const { speaker, confidence } = findBestSpeaker(whisperSeg.start, whisperSeg.end, speakerSegments);
+    return [{
+      start: whisperSeg.start,
+      end: whisperSeg.end,
+      text: whisperSeg.text.trim(),
+      speaker,
+      confidence,
+    }];
+  }
+
+  // Split text proportionally by duration
+  const totalDuration = whisperSeg.end - whisperSeg.start;
+  const words = whisperSeg.text.trim().split(/\s+/).filter((w) => w.length > 0);
+  const result = [];
+  let wordIndex = 0;
+
+  for (let i = 0; i < splitPoints.length - 1; i++) {
+    const subStart = splitPoints[i];
+    const subEnd = splitPoints[i + 1];
+    const subDuration = subEnd - subStart;
+    const fraction = totalDuration > 0 ? subDuration / totalDuration : 0;
+
+    // Calculate word count for this sub-segment
+    const isLast = i === splitPoints.length - 2;
+    let wordCount;
+    if (isLast) {
+      wordCount = words.length - wordIndex;
+    } else {
+      wordCount = Math.round(fraction * words.length);
+      wordCount = Math.max(1, Math.min(wordCount, words.length - wordIndex - 1));
+    }
+
+    if (wordCount <= 0) continue;
+
+    const subText = words.slice(wordIndex, wordIndex + wordCount).join(' ');
+    wordIndex += wordCount;
+
+    const { speaker, confidence } = findBestSpeaker(subStart, subEnd, speakerSegments);
+    result.push({ start: subStart, end: subEnd, text: subText, speaker, confidence });
+  }
+
+  return result.length > 0 ? result : [{
+    start: whisperSeg.start,
+    end: whisperSeg.end,
+    text: whisperSeg.text.trim(),
+    speaker: 'UNKNOWN',
+    confidence: 0,
+  }];
+}
+
+/**
+ * Merge consecutive aligned segments that share the same speaker and are close together.
+ * This reduces over-fragmentation without losing speaker boundaries.
+ * @param {AlignedSegment[]} segments
+ * @param {number} [maxGap=0.3] - Maximum gap to merge across (seconds)
+ * @returns {AlignedSegment[]}
+ */
+function mergeSameSpeakerSegments(segments, maxGap = 0.3) {
+  if (!segments || segments.length === 0) return [];
+
+  const merged = [];
+  let current = { ...segments[0] };
+
+  for (let i = 1; i < segments.length; i++) {
+    const seg = segments[i];
+    const gap = seg.start - current.end;
+
+    if (seg.speaker === current.speaker && gap <= maxGap) {
+      current.end = seg.end;
+      current.text = current.text + ' ' + seg.text;
+      current.confidence = Math.min(current.confidence, seg.confidence);
+    } else {
+      merged.push(current);
+      current = { ...seg };
+    }
+  }
+  merged.push(current);
+
+  return merged;
+}
+
+/**
  * Align whisper transcription segments with speaker diarization segments.
- * Uses segment merging and speaker smoothing for robust alignment.
+ * Uses speaker-boundary-driven alignment: splits whisper segments at speaker
+ * transition points for fine-grained speaker attribution.
  * @param {WhisperSegment[]} whisperSegments - Transcription segments from Whisper
  * @param {SpeakerSegment[]} speakerSegments - Speaker segments from diarization backend
  * @returns {AlignedSegment[]}
@@ -174,28 +319,16 @@ function alignSpeakers(whisperSegments, speakerSegments) {
     }));
   }
 
-  // Step 1: Merge short whisper segments into longer chunks for robust alignment
-  const mergedSegments = mergeWhisperSegments(whisperSegments);
+  // Split each whisper segment at speaker boundaries
+  // Returns fine-grained segments (no merging) so SRT view has individual entries
+  // formatSpeakerTranscript() handles grouping for speakers.txt readability
+  const aligned = [];
+  for (const seg of whisperSegments) {
+    const splitSegments = splitAtSpeakerBoundaries(seg, speakerSegments);
+    aligned.push(...splitSegments);
+  }
 
-  // Step 2: Align merged segments with speaker diarization
-  const aligned = mergedSegments.map((seg) => {
-    const { speaker, confidence } = findBestSpeaker(
-      seg.start,
-      seg.end,
-      speakerSegments
-    );
-
-    return {
-      start: seg.start,
-      end: seg.end,
-      text: seg.text,
-      speaker,
-      confidence,
-    };
-  });
-
-  // Step 3: Smooth out speaker flicker
-  return smoothSpeakerAssignments(aligned);
+  return aligned;
 }
 
 /**
@@ -288,6 +421,8 @@ function parseTimestamp(ts) {
 
 module.exports = {
   alignSpeakers,
+  splitAtSpeakerBoundaries,
+  mergeSameSpeakerSegments,
   mergeWhisperSegments,
   smoothSpeakerAssignments,
   parseSRT,

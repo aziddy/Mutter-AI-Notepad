@@ -240,14 +240,14 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
             <div className="srt-entry-text">
               {searchQuery ? (
                 <HighlightedText
-                  text={entry.text}
+                  text={stripSpeakerPrefix(entry.text)}
                   searchQuery={searchQuery}
                   caseSensitive={caseSensitive}
                   currentMatchGlobalIndex={currentMatchIndex}
                   matchStartIndex={matchStartIndices[index] || 0}
                 />
               ) : (
-                entry.text
+                stripSpeakerPrefix(entry.text)
               )}
             </div>
           </div>

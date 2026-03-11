@@ -531,8 +531,8 @@ ipcMain.handle('update-diarization-config', async (event, config) => {
   return diarizationConfigService.updateConfig(config);
 });
 
-ipcMain.handle('transcribe-file-with-diarization', async (event, filePath, customName, streamId) => {
-  console.log('transcribe-file-with-diarization:', filePath, 'custom name:', customName);
+ipcMain.handle('transcribe-file-with-diarization', async (event, filePath, customName, streamId, speakerHints) => {
+  console.log('transcribe-file-with-diarization:', filePath, 'custom name:', customName, 'speaker hints:', speakerHints);
 
   try {
     const config = diarizationConfigService.getConfig();
@@ -552,12 +552,16 @@ ipcMain.handle('transcribe-file-with-diarization', async (event, filePath, custo
 
     sendProgress('Initializing diarization service...');
 
+    // Per-transcription speaker hints override global config
+    const minSpeakers = speakerHints?.minSpeakers ?? config.minSpeakers;
+    const maxSpeakers = speakerHints?.maxSpeakers ?? config.maxSpeakers;
+
     // Create diarization service
     const diarizationService = new DiarizationService({
       backend: config.backend,
       hfToken: config.hfToken,
-      minSpeakers: config.minSpeakers || undefined,
-      maxSpeakers: config.maxSpeakers || undefined
+      minSpeakers: minSpeakers || undefined,
+      maxSpeakers: maxSpeakers || undefined
     });
 
     // Check environment

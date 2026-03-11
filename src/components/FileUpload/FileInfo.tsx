@@ -11,6 +11,8 @@ const FileInfo: React.FC = () => {
   const [enableDiarization, setEnableDiarization] = useState(false);
   const [diarizationAvailable, setDiarizationAvailable] = useState<boolean | null>(null);
   const [diarizationConfig, setDiarizationConfig] = useState<DiarizationConfig | null>(null);
+  const [minSpeakers, setMinSpeakers] = useState<number | null>(null);
+  const [maxSpeakers, setMaxSpeakers] = useState<number | null>(null);
 
   const selectedFilePath = state.selectedFilePath;
 
@@ -20,6 +22,8 @@ const FileInfo: React.FC = () => {
       try {
         const config = await getDiarizationConfig();
         setDiarizationConfig(config);
+        setMinSpeakers(config.minSpeakers ?? null);
+        setMaxSpeakers(config.maxSpeakers ?? null);
         const envCheck = await checkDiarizationEnvironment(config.backend);
         setDiarizationAvailable(envCheck.ready);
       } catch (error) {
@@ -48,6 +52,7 @@ const FileInfo: React.FC = () => {
             dispatch({ type: 'SHOW_PROGRESS', payload: message });
           },
           async (result) => {
+
             dispatch({
               type: 'SET_CURRENT_TRANSCRIPTION',
               payload: {
@@ -94,7 +99,8 @@ const FileInfo: React.FC = () => {
               }
             });
             setIsTranscribing(false);
-          }
+          },
+          { minSpeakers, maxSpeakers }
         );
 
         // Store cleanup function if needed
@@ -195,6 +201,32 @@ const FileInfo: React.FC = () => {
             ? `Identify speakers (${diarizationConfig?.backend || 'fluidaudio'})`
             : 'Not available - check Settings'}
         </span>
+        {enableDiarization && diarizationAvailable && (
+          <div className="speaker-hints">
+            <label className="speaker-hints-label">Speaker Count Hints</label>
+            <div className="speaker-hints-inputs">
+              <input
+                type="number"
+                value={minSpeakers ?? ''}
+                onChange={(e) => setMinSpeakers(e.target.value ? parseInt(e.target.value) : null)}
+                min="1"
+                max="20"
+                placeholder="Min (auto)"
+                className="speaker-hint-input"
+              />
+              <input
+                type="number"
+                value={maxSpeakers ?? ''}
+                onChange={(e) => setMaxSpeakers(e.target.value ? parseInt(e.target.value) : null)}
+                min="1"
+                max="20"
+                placeholder="Max (auto)"
+                className="speaker-hint-input"
+              />
+            </div>
+            <span className="speaker-hints-hint">Helps with video call audio where auto-detection struggles.</span>
+          </div>
+        )}
       </div>
       <button
         className="btn btn-secondary"

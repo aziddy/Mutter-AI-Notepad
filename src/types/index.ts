@@ -198,7 +198,8 @@ export interface ElectronAPI {
     transcription: string | null,
     onChunk: (chunk: string) => void,
     onComplete: (result: string) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    speakerHints?: { minSpeakers?: number | null; maxSpeakers?: number | null }
   ) => () => void; // Returns cleanup function
 
   generateInsightsStream: (
@@ -253,7 +254,8 @@ export interface ElectronAPI {
       srtFileName: string;
       folderPath: string;
     }) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    speakerHints?: { minSpeakers?: number | null; maxSpeakers?: number | null }
   ) => () => void; // Returns cleanup function
 }
 

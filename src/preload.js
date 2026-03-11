@@ -136,7 +136,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDiarizationConfig: () => ipcRenderer.invoke('get-diarization-config'),
   updateDiarizationConfig: (config) => ipcRenderer.invoke('update-diarization-config', config),
 
-  transcribeFileWithDiarization: (filePath, customName, onProgress, onComplete, onError) => {
+  transcribeFileWithDiarization: (filePath, customName, onProgress, onComplete, onError, speakerHints) => {
     const streamId = Math.random().toString(36).substring(7);
 
     // Set up listeners
@@ -161,7 +161,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     });
 
     // Start the diarization
-    ipcRenderer.invoke('transcribe-file-with-diarization', filePath, customName, streamId);
+    ipcRenderer.invoke('transcribe-file-with-diarization', filePath, customName, streamId, speakerHints);
 
     // Return cleanup function
     return () => {

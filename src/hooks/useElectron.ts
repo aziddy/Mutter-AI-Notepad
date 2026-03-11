@@ -180,12 +180,13 @@ export const useElectron = () => {
       srtFileName: string;
       folderPath: string;
     }) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    speakerHints?: { minSpeakers?: number | null; maxSpeakers?: number | null }
   ) => {
     if (!window.electronAPI) {
       throw new Error('Electron API not available');
     }
-    return window.electronAPI.transcribeFileWithDiarization(filePath, customName, onProgress, onComplete, onError);
+    return window.electronAPI.transcribeFileWithDiarization(filePath, customName, onProgress, onComplete, onError, speakerHints);
   }, []);
 
   return {

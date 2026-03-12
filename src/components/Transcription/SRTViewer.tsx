@@ -278,15 +278,15 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
             onClick={() => handleEntryClick(entry)}
           >
             <div className="srt-entry-header">
-              {speaker && color && (
+              {(speaker || (onSpeakerChange && speakers && speakers.length > 0)) && (
                 <span className="srt-speaker-label-wrapper" ref={speakerDropdown?.entryIndex === index ? dropdownRef : undefined}>
                   <span
                     className={`srt-speaker-label ${onSpeakerChange ? 'srt-speaker-label-clickable' : ''} ${isReassigned ? 'srt-speaker-label-reassigned' : ''}`}
-                    style={{ backgroundColor: color }}
-                    onClick={onSpeakerChange ? (e) => handleSpeakerLabelClick(e, index, entry, speaker) : undefined}
+                    style={{ backgroundColor: color || '#9CA3AF' }}
+                    onClick={onSpeakerChange ? (e) => handleSpeakerLabelClick(e, index, entry, speaker || 'UNKNOWN') : undefined}
                     title={onSpeakerChange ? 'Click to change speaker' : undefined}
                   >
-                    {speakerNames?.[speaker] || speaker}
+                    {speaker ? (speakerNames?.[speaker] || speaker) : 'Unknown'}
                     {isReassigned && <i className="fas fa-pen srt-speaker-edited-icon"></i>}
                   </span>
                   {speakerDropdown?.entryIndex === index && speakers && (

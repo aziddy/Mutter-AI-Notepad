@@ -23,6 +23,8 @@ interface SRTViewerProps {
   speakerNames?: Record<string, string>;
   speakers?: string[];
   onSpeakerChange?: (entryStartTime: number, entryEndTime: number, newSpeaker: string) => void;
+  onSplitSegment?: (entryStartTime: number, entryEndTime: number, wordIndex: number) => void;
+  onUndoSplit?: (entryStartTime: number, entryEndTime: number) => void;
   // Search props
   searchQuery?: string;
   caseSensitive?: boolean;
@@ -38,6 +40,8 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
   speakerNames,
   speakers,
   onSpeakerChange,
+  onSplitSegment,
+  onUndoSplit,
   searchQuery,
   caseSensitive = false,
   currentMatchIndex = 0,
@@ -59,9 +63,9 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
   }, [speakerSegments, speakers]);
 
   // Find speaker for a given time range
-  const findSpeakerForEntry = useCallback((startTime: number, endTime: number): { speaker: string | null; color: string | null; isReassigned: boolean } => {
+  const findSpeakerForEntry = useCallback((startTime: number, endTime: number): { speaker: string | null; color: string | null; isReassigned: boolean; isSplit: boolean } => {
     if (!speakerSegments || speakerSegments.length === 0) {
-      return { speaker: null, color: null, isReassigned: false };
+      return { speaker: null, color: null, isReassigned: false, isSplit: false };
     }
     // Find the segment with the most overlap
     let bestMatch: SpeakerSegment | null = null;
@@ -77,9 +81,10 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
     }
     if (bestMatch && bestMatch.speaker) {
       const isReassigned = !!bestMatch.originalSpeaker && bestMatch.originalSpeaker !== bestMatch.speaker;
-      return { speaker: bestMatch.speaker, color: speakerColors[bestMatch.speaker] || null, isReassigned };
+      const isSplit = !!bestMatch.splitFrom;
+      return { speaker: bestMatch.speaker, color: speakerColors[bestMatch.speaker] || null, isReassigned, isSplit };
     }
-    return { speaker: null, color: null, isReassigned: false };
+    return { speaker: null, color: null, isReassigned: false, isSplit: false };
   }, [speakerSegments, speakerColors]);
 
   // Speaker dropdown state
@@ -90,6 +95,9 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
     currentSpeaker: string;
   } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Split mode state
+  const [splitModeEntryIndex, setSplitModeEntryIndex] = useState<number | null>(null);
 
   // Open dropdown on speaker label click
   const handleSpeakerLabelClick = useCallback((e: React.MouseEvent, entryIndex: number, entry: SRTEntry, currentSpeaker: string) => {
@@ -126,6 +134,34 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
       document.removeEventListener('keydown', handleEscape);
     };
   }, [speakerDropdown]);
+
+  // Toggle split mode for an entry
+  const handleSplitModeToggle = useCallback((e: React.MouseEvent, entryIndex: number) => {
+    e.stopPropagation();
+    setSplitModeEntryIndex(prev => prev === entryIndex ? null : entryIndex);
+    setSpeakerDropdown(null);
+  }, []);
+
+  // Handle word click in split mode
+  const handleWordClick = useCallback((e: React.MouseEvent, entry: SRTEntry, wordIndex: number) => {
+    e.stopPropagation();
+    if (wordIndex === 0) return; // Can't split at the very first word
+    if (onSplitSegment) {
+      onSplitSegment(entry.startTime, entry.endTime, wordIndex);
+    }
+    setSplitModeEntryIndex(null);
+  }, [onSplitSegment]);
+
+  // Close split mode on Escape
+  useEffect(() => {
+    if (splitModeEntryIndex === null) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSplitModeEntryIndex(null);
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [splitModeEntryIndex]);
+
   // Parse SRT content into entries
   const srtEntries = useMemo(() => {
     if (!srtContent) return [];
@@ -269,7 +305,7 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
         const isPlaying = currentPlayingEntry &&
           currentPlayingEntry.startTime === entry.startTime &&
           currentPlayingEntry.endTime === entry.endTime;
-        const { speaker, color, isReassigned } = findSpeakerForEntry(entry.startTime, entry.endTime);
+        const { speaker, color, isReassigned, isSplit } = findSpeakerForEntry(entry.startTime, entry.endTime);
 
         return (
           <div
@@ -301,17 +337,60 @@ const SRTViewer: React.FC<SRTViewerProps> = ({
                           <span>{speakerNames?.[s] || s}</span>
                         </div>
                       ))}
+                      {speaker && speaker !== 'UNKNOWN' && (
+                        <>
+                          <div className="srt-speaker-dropdown-divider" />
+                          <div
+                            className="srt-speaker-dropdown-item"
+                            onClick={(e) => handleDropdownSelect(e, 'UNKNOWN')}
+                          >
+                            <span className="speaker-color-dot" style={{ backgroundColor: '#9CA3AF' }} />
+                            <span>Unknown</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </span>
               )}
+              {isSplit && <i className="fas fa-code-branch srt-split-indicator" title="Manually split segment"></i>}
               <span className="srt-entry-number">#{index + 1}</span>
               <span className="srt-entry-time">
                 {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
               </span>
+              {isSplit && onUndoSplit && (
+                <button
+                  className="srt-undo-split-btn"
+                  onClick={(e) => { e.stopPropagation(); onUndoSplit(entry.startTime, entry.endTime); }}
+                  title="Undo split (merge back together)"
+                >
+                  <i className="fas fa-undo"></i>
+                </button>
+              )}
+              {onSplitSegment && speaker && (
+                <button
+                  className={`srt-split-btn ${splitModeEntryIndex === index ? 'active' : ''}`}
+                  onClick={(e) => handleSplitModeToggle(e, index)}
+                  title={splitModeEntryIndex === index ? 'Cancel split' : 'Split segment at word boundary'}
+                >
+                  <i className="fas fa-cut"></i>
+                </button>
+              )}
             </div>
-            <div className="srt-entry-text">
-              {searchQuery ? (
+            <div className={`srt-entry-text ${splitModeEntryIndex === index ? 'srt-entry-split-mode' : ''}`}>
+              {splitModeEntryIndex === index ? (
+                // Split mode: render each word as clickable
+                stripSpeakerPrefix(entry.text).split(/\s+/).map((word, wi, arr) => (
+                  <span
+                    key={wi}
+                    className={`srt-word-clickable ${wi === 0 ? 'srt-word-first' : ''}`}
+                    onClick={(e) => handleWordClick(e, entry, wi)}
+                    title={wi === 0 ? 'Cannot split at first word' : `Split here — move "${word}" and following to next speaker`}
+                  >
+                    {word}{wi < arr.length - 1 ? ' ' : ''}
+                  </span>
+                ))
+              ) : searchQuery ? (
                 <HighlightedText
                   text={stripSpeakerPrefix(entry.text)}
                   searchQuery={searchQuery}

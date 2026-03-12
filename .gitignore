@@ -160,3 +160,4 @@ tests/diarization/fixtures/diarization-test-output.*
 # Root folder audio files
 /*.wav
 /*.txt
+temp.md

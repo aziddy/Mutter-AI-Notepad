@@ -2582,3 +2582,83 @@ body {
     font-weight: 600;
     cursor: default;
 }
+
+/* Split segment button */
+.srt-split-btn {
+    background: none;
+    border: none;
+    color: #9CA3AF;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    margin-left: auto;
+    transition: color 0.15s, background 0.15s;
+}
+
+.srt-split-btn:hover {
+    color: #3B82F6;
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.srt-split-btn.active {
+    color: #3B82F6;
+    background: rgba(59, 130, 246, 0.15);
+}
+
+/* Split mode entry */
+.srt-entry-split-mode {
+    cursor: crosshair;
+}
+
+/* Clickable words in split mode */
+.srt-word-clickable {
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 1px 2px;
+    transition: background 0.1s;
+}
+
+.srt-word-clickable:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
+.srt-word-clickable.srt-word-first {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.srt-word-clickable.srt-word-first:hover {
+    background: none;
+}
+
+/* Split indicator icon */
+.srt-split-indicator {
+    color: #9CA3AF;
+    font-size: 0.65rem;
+    margin-right: 4px;
+}
+
+/* Undo split button */
+.srt-undo-split-btn {
+    background: none;
+    border: none;
+    color: #9CA3AF;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+}
+
+.srt-undo-split-btn:hover {
+    color: #F59E0B;
+    background: rgba(245, 158, 11, 0.1);
+}
+
+/* Speaker dropdown divider */
+.srt-speaker-dropdown-divider {
+    height: 1px;
+    background: #E5E7EB;
+    margin: 4px 0;
+}

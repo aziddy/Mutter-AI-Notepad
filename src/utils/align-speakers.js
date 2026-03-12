@@ -202,8 +202,10 @@ function splitAtSpeakerBoundaries(whisperSeg, speakerSegments) {
     const curr = sorted[i];
     const next = sorted[i + 1];
     if (curr.speaker !== next.speaker) {
-      // Speaker transition - use the boundary between segments
-      const boundary = (curr.end + next.start) / 2;
+      // Speaker transition - use the earlier natural boundary
+      // When there's a gap: use curr.end (speaker A stopped talking)
+      // When there's overlap: use next.start (speaker B started talking)
+      const boundary = Math.min(curr.end, next.start);
       const clampedBoundary = Math.max(whisperSeg.start, Math.min(whisperSeg.end, boundary));
       if (clampedBoundary > splitPoints[splitPoints.length - 1] + 0.05) {
         splitPoints.push(clampedBoundary);
@@ -242,7 +244,7 @@ function splitAtSpeakerBoundaries(whisperSeg, speakerSegments) {
     if (isLast) {
       wordCount = words.length - wordIndex;
     } else {
-      wordCount = Math.round(fraction * words.length);
+      wordCount = Math.floor(fraction * words.length);
       wordCount = Math.max(1, Math.min(wordCount, words.length - wordIndex - 1));
     }
 

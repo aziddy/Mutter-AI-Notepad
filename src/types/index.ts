@@ -94,6 +94,7 @@ export interface DiarizationEnvironmentCheck {
 export interface SpeakerSegment {
   speaker: string;
   originalSpeaker?: string;
+  splitFrom?: string;
   start: number;
   end: number;
   text: string;

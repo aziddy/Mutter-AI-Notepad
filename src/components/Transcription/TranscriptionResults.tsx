@@ -349,11 +349,23 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
     const segments = state.currentJsonData?.speakerSegments;
     if (!segments) return;
 
-    const updatedSegments = segments.map((seg: { speaker: string; originalSpeaker?: string; start: number; end: number }) => {
-      // Find segments that overlap this SRT entry
+    // Find the single best matching segment (max overlap) to avoid affecting adjacent split halves
+    let bestIdx = -1;
+    let maxOverlap = 0;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
       const overlapStart = Math.max(entryStartTime, seg.start);
       const overlapEnd = Math.min(entryEndTime, seg.end);
-      if (overlapEnd > overlapStart) {
+      const overlap = Math.max(0, overlapEnd - overlapStart);
+      if (overlap > maxOverlap) {
+        maxOverlap = overlap;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx === -1) return;
+
+    const updatedSegments = segments.map((seg: { speaker: string; originalSpeaker?: string; start: number; end: number }, i: number) => {
+      if (i === bestIdx) {
         return {
           ...seg,
           originalSpeaker: seg.originalSpeaker ?? seg.speaker,
@@ -377,6 +389,209 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
         console.error('Failed to persist speaker segment change:', error);
       }
     }
+  }, [state.currentJsonData?.speakerSegments, state.transcriptions, state.currentTranscriptionId, updateSpeakerSegments, dispatch]);
+
+  // Handle splitting a segment at a word boundary
+  const handleSplitSegment = useCallback(async (entryStartTime: number, entryEndTime: number, wordIndex: number) => {
+    const segments = state.currentJsonData?.speakerSegments;
+    if (!segments) return;
+
+    // Find the segment that best matches this SRT entry by time overlap
+    let bestIdx = -1;
+    let maxOverlap = 0;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const overlapStart = Math.max(entryStartTime, seg.start);
+      const overlapEnd = Math.min(entryEndTime, seg.end);
+      const overlap = Math.max(0, overlapEnd - overlapStart);
+      if (overlap > maxOverlap) {
+        maxOverlap = overlap;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx === -1) return;
+
+    const seg = segments[bestIdx];
+    // Strip speaker prefix before splitting
+    const cleanText = seg.text.replace(/^\[(SPEAKER_\d+|UNKNOWN)\]\s*/, '');
+    const words = cleanText.split(/\s+/).filter((w: string) => w.length > 0);
+    if (wordIndex <= 0 || wordIndex >= words.length) return;
+
+    const totalWords = words.length;
+    const fraction = wordIndex / totalWords;
+    const splitTime = seg.start + fraction * (seg.end - seg.start);
+
+    // Determine the next segment's speaker for the split-off portion
+    let nextSpeaker = seg.speaker;
+    if (bestIdx + 1 < segments.length) {
+      nextSpeaker = segments[bestIdx + 1].speaker;
+    }
+
+    const splitId = `split-${Date.now()}`;
+    const firstHalf = {
+      ...seg,
+      text: words.slice(0, wordIndex).join(' '),
+      end: splitTime,
+      splitFrom: splitId,
+    };
+    const secondHalf = {
+      ...seg,
+      text: words.slice(wordIndex).join(' '),
+      start: splitTime,
+      speaker: nextSpeaker,
+      originalSpeaker: seg.originalSpeaker ?? seg.speaker,
+      splitFrom: splitId,
+    };
+
+    const updatedSegments = [
+      ...segments.slice(0, bestIdx),
+      firstHalf,
+      secondHalf,
+      ...segments.slice(bestIdx + 1),
+    ];
+
+    dispatch({ type: 'UPDATE_SPEAKER_SEGMENTS', payload: updatedSegments });
+
+    // Regenerate SRT content from updated segments
+    const newSrtContent = updatedSegments.map((s: { start: number; end: number; speaker?: string; text: string }, i: number) => {
+      const startH = Math.floor(s.start / 3600);
+      const startM = Math.floor((s.start % 3600) / 60);
+      const startS = Math.floor(s.start % 60);
+      const startMs = Math.round((s.start % 1) * 1000);
+      const endH = Math.floor(s.end / 3600);
+      const endM = Math.floor((s.end % 3600) / 60);
+      const endS = Math.floor(s.end % 60);
+      const endMs = Math.round((s.end % 1) * 1000);
+      const startStr = `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}:${String(startS).padStart(2, '0')},${String(startMs).padStart(3, '0')}`;
+      const endStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:${String(endS).padStart(2, '0')},${String(endMs).padStart(3, '0')}`;
+      const speakerPrefix = s.speaker ? `[${s.speaker}] ` : '';
+      return `${i + 1}\n${startStr} --> ${endStr}\n${speakerPrefix}${s.text}`;
+    }).join('\n\n');
+
+    dispatch({ type: 'SET_SRT_CONTENT', payload: newSrtContent });
+
+    // Persist to disk
+    const folderPath = state.transcriptions.find(
+      t => t.fileName === state.currentTranscriptionId
+    )?.folderPath;
+    const folderName = folderPath?.split(/[\\/]/).pop();
+    if (folderName) {
+      try {
+        await updateSpeakerSegments(folderName, updatedSegments);
+      } catch (error) {
+        console.error('Failed to persist segment split:', error);
+      }
+    }
+
+    dispatch({
+      type: 'ADD_TOAST',
+      payload: { id: Date.now().toString(), message: 'Segment split successfully', type: 'success' }
+    });
+  }, [state.currentJsonData?.speakerSegments, state.transcriptions, state.currentTranscriptionId, updateSpeakerSegments, dispatch]);
+
+  // Handle undoing a manual split (merge two halves back together)
+  const handleUndoSplit = useCallback(async (entryStartTime: number, entryEndTime: number) => {
+    const segments = state.currentJsonData?.speakerSegments;
+    if (!segments) return;
+
+    // Find the segment matching this entry by time overlap
+    let matchIdx = -1;
+    let maxOverlap = 0;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const overlapStart = Math.max(entryStartTime, seg.start);
+      const overlapEnd = Math.min(entryEndTime, seg.end);
+      const overlap = Math.max(0, overlapEnd - overlapStart);
+      if (overlap > maxOverlap) {
+        maxOverlap = overlap;
+        matchIdx = i;
+      }
+    }
+    if (matchIdx === -1) return;
+
+    const matchedSeg = segments[matchIdx];
+    if (!matchedSeg.splitFrom) return;
+
+    const splitId = matchedSeg.splitFrom;
+
+    // Find all segments with this splitFrom ID
+    const splitIndices: number[] = [];
+    for (let i = 0; i < segments.length; i++) {
+      if (segments[i].splitFrom === splitId) {
+        splitIndices.push(i);
+      }
+    }
+    if (splitIndices.length < 2) return;
+
+    // Sort by start time to merge in order
+    splitIndices.sort((a, b) => segments[a].start - segments[b].start);
+
+    const firstSeg = segments[splitIndices[0]];
+    const lastSeg = segments[splitIndices[splitIndices.length - 1]];
+
+    // Merge: combine text, use full time range, restore original speaker if available
+    const mergedSeg = {
+      ...firstSeg,
+      text: splitIndices.map(i => segments[i].text).join(' '),
+      start: firstSeg.start,
+      end: lastSeg.end,
+      speaker: firstSeg.originalSpeaker || firstSeg.speaker,
+      splitFrom: undefined,
+      originalSpeaker: undefined,
+    };
+
+    // Build new segments array, replacing split halves with merged segment
+    const updatedSegments = [];
+    let inserted = false;
+    for (let i = 0; i < segments.length; i++) {
+      if (splitIndices.includes(i)) {
+        if (!inserted) {
+          updatedSegments.push(mergedSeg);
+          inserted = true;
+        }
+        // Skip other split halves
+      } else {
+        updatedSegments.push(segments[i]);
+      }
+    }
+
+    dispatch({ type: 'UPDATE_SPEAKER_SEGMENTS', payload: updatedSegments });
+
+    // Regenerate SRT content
+    const newSrtContent = updatedSegments.map((s: { start: number; end: number; speaker?: string; text: string }, i: number) => {
+      const startH = Math.floor(s.start / 3600);
+      const startM = Math.floor((s.start % 3600) / 60);
+      const startS = Math.floor(s.start % 60);
+      const startMs = Math.round((s.start % 1) * 1000);
+      const endH = Math.floor(s.end / 3600);
+      const endM = Math.floor((s.end % 3600) / 60);
+      const endS = Math.floor(s.end % 60);
+      const endMs = Math.round((s.end % 1) * 1000);
+      const startStr = `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}:${String(startS).padStart(2, '0')},${String(startMs).padStart(3, '0')}`;
+      const endStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:${String(endS).padStart(2, '0')},${String(endMs).padStart(3, '0')}`;
+      const speakerPrefix = s.speaker ? `[${s.speaker}] ` : '';
+      return `${i + 1}\n${startStr} --> ${endStr}\n${speakerPrefix}${s.text}`;
+    }).join('\n\n');
+
+    dispatch({ type: 'SET_SRT_CONTENT', payload: newSrtContent });
+
+    // Persist to disk
+    const folderPath = state.transcriptions.find(
+      t => t.fileName === state.currentTranscriptionId
+    )?.folderPath;
+    const folderName = folderPath?.split(/[\\/]/).pop();
+    if (folderName) {
+      try {
+        await updateSpeakerSegments(folderName, updatedSegments);
+      } catch (error) {
+        console.error('Failed to persist undo split:', error);
+      }
+    }
+
+    dispatch({
+      type: 'ADD_TOAST',
+      payload: { id: Date.now().toString(), message: 'Split undone — segments merged', type: 'success' }
+    });
   }, [state.currentJsonData?.speakerSegments, state.transcriptions, state.currentTranscriptionId, updateSpeakerSegments, dispatch]);
 
   // Handle AI panel collapse toggle
@@ -578,6 +793,8 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
             speakerNames={state.currentJsonData?.speakerNames}
             speakers={state.currentJsonData?.speakers}
             onSpeakerChange={handleSpeakerChange}
+            onSplitSegment={handleSplitSegment}
+            onUndoSplit={handleUndoSplit}
             searchQuery={search.isSearchOpen ? search.searchQuery : undefined}
             caseSensitive={search.caseSensitive}
             currentMatchIndex={search.currentMatchIndex}

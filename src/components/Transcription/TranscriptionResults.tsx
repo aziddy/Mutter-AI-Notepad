@@ -76,7 +76,7 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
   const [activeAITab, setActiveAITab] = useState<'local' | 'api'>('local');
 
   // AI panel collapse state
-  const [isAIPanelCollapsed, setIsAIPanelCollapsed] = useState(false);
+  const [isAIPanelCollapsed, setIsAIPanelCollapsed] = useState(true);
 
   // SRT view mode state
   const [srtViewMode, setSrtViewMode] = useState<'segmented' | 'continuous'>('segmented');

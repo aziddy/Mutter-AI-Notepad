@@ -194,8 +194,9 @@ class TranscriptionService {
         '-m', modelPath,
         '-f', audioPath,
         '-otxt',  // Output as text
-        '-oj', // Output as JSON
+        '-ojf', // Output as full JSON (includes per-token timestamps for word-level alignment)
         '-osrt', // Output as SRT
+        '-sow',  // Split on word boundaries (cleaner segments for diarization)
         '-l', 'en', // Language
         '-sns',  // Suppress non-speech tokens (reduces hallucinated/repeated text)
         '-et', '2.0',  // Lower entropy threshold (fail & retry sooner on uncertain segments)

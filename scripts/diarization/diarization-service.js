@@ -10,7 +10,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { TranscriptionService } = require('../../src/transcription');
-const { alignSpeakers, parseSRT } = require('../../src/utils/align-speakers');
+const { alignSpeakers, parseSRT, parseWhisperJson } = require('../../src/utils/align-speakers');
 const { runFluidAudio, checkFluidAudioAvailable } = require('./run_fluidaudio');
 
 class DiarizationService {
@@ -249,17 +249,14 @@ class DiarizationService {
     // Step 3: Align transcription with speaker segments
     console.log('[Diarization] Step 3: Aligning speakers with transcription...');
 
-    // Parse SRT from whisper output
+    // Parse whisper output - prefer full JSON (has word-level timestamps) over SRT
     let whisperSegments = [];
-    if (transcription.srt) {
+    if (transcription.json && transcription.json.transcription) {
+      // Use parseWhisperJson to extract segments with word-level timestamps
+      whisperSegments = parseWhisperJson(transcription.json);
+    } else if (transcription.srt) {
+      // Fallback to SRT (no word timestamps)
       whisperSegments = parseSRT(transcription.srt);
-    } else if (transcription.json && transcription.json.transcription) {
-      // Parse from JSON
-      whisperSegments = transcription.json.transcription.map((item) => ({
-        start: parseTimestamp(item.timestamps.from),
-        end: parseTimestamp(item.timestamps.to),
-        text: item.text.trim(),
-      }));
     }
 
     const alignedSegments = alignSpeakers(

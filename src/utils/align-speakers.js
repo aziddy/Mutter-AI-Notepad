@@ -9,10 +9,18 @@
  */
 
 /**
+ * @typedef {Object} WordTimestamp
+ * @property {string} text - Word text
+ * @property {number} start - Start time in seconds
+ * @property {number} end - End time in seconds
+ */
+
+/**
  * @typedef {Object} WhisperSegment
  * @property {number} start - Start time in seconds
  * @property {number} end - End time in seconds
  * @property {string} text - Transcribed text
+ * @property {WordTimestamp[]} [words] - Optional word-level timestamps (from -ojf full JSON)
  */
 
 /**
@@ -152,8 +160,27 @@ function smoothSpeakerAssignments(segments, confidenceThreshold = 0.5) {
 }
 
 /**
+ * Find the word index where a speaker boundary falls, using word-level timestamps.
+ * Returns the index of the first word that belongs to the next speaker's segment.
+ * @param {WordTimestamp[]} words - Words with timestamps
+ * @param {number} boundaryTime - Speaker boundary time in seconds
+ * @returns {number} Index of the first word after the boundary
+ */
+function findWordIndexAtBoundary(words, boundaryTime) {
+  // Find the first word whose start time is >= the boundary
+  // This word and everything after it belong to the next speaker
+  for (let i = 0; i < words.length; i++) {
+    if (words[i].start !== null && words[i].start >= boundaryTime) {
+      return i;
+    }
+  }
+  return words.length;
+}
+
+/**
  * Split a whisper segment at speaker boundaries when multiple speakers overlap.
- * Distributes text proportionally by duration, splitting at word boundaries.
+ * Uses word-level timestamps for precise splitting when available,
+ * falls back to proportional time allocation otherwise.
  * @param {WhisperSegment} whisperSeg - A single whisper segment
  * @param {SpeakerSegment[]} speakerSegments - Speaker segments from diarization
  * @returns {AlignedSegment[]}
@@ -226,7 +253,52 @@ function splitAtSpeakerBoundaries(whisperSeg, speakerSegments) {
     }];
   }
 
-  // Split text proportionally by duration
+  // Check if we have word-level timestamps for precise splitting
+  const hasWordTimestamps = whisperSeg.words && whisperSeg.words.length > 0;
+
+  if (hasWordTimestamps) {
+    // PRECISE PATH: Use word-level timestamps to split at exact word boundaries
+    const wordTimestamps = whisperSeg.words;
+    const result = [];
+    let wordIdx = 0;
+
+    for (let i = 0; i < splitPoints.length - 1; i++) {
+      const subStart = splitPoints[i];
+      const subEnd = splitPoints[i + 1];
+      const isLast = i === splitPoints.length - 2;
+
+      // Find which words fall in this sub-segment
+      let endIdx;
+      if (isLast) {
+        endIdx = wordTimestamps.length;
+      } else {
+        endIdx = findWordIndexAtBoundary(wordTimestamps, subEnd);
+        // Ensure at least one word per sub-segment (unless it's truly empty)
+        if (endIdx <= wordIdx && wordIdx < wordTimestamps.length) {
+          endIdx = wordIdx + 1;
+        }
+      }
+
+      if (endIdx <= wordIdx) continue;
+
+      const subWords = wordTimestamps.slice(wordIdx, endIdx);
+      const subText = subWords.map((w) => w.text).join(' ');
+      wordIdx = endIdx;
+
+      const { speaker, confidence } = findBestSpeaker(subStart, subEnd, speakerSegments);
+      result.push({ start: subStart, end: subEnd, text: subText, speaker, confidence });
+    }
+
+    return result.length > 0 ? result : [{
+      start: whisperSeg.start,
+      end: whisperSeg.end,
+      text: whisperSeg.text.trim(),
+      speaker: 'UNKNOWN',
+      confidence: 0,
+    }];
+  }
+
+  // FALLBACK PATH: Split text proportionally by duration (no word timestamps)
   const totalDuration = whisperSeg.end - whisperSeg.start;
   const words = whisperSeg.text.trim().split(/\s+/).filter((w) => w.length > 0);
   const result = [];
@@ -381,7 +453,67 @@ function parseSRT(srtContent) {
 }
 
 /**
+ * Extract word-level timestamps from whisper.cpp full JSON tokens.
+ * Tokens starting with a space begin a new word; subsequent tokens without
+ * a leading space are subword continuations of the same word.
+ * @param {Array} tokens - Token array from whisper.cpp -ojf output
+ * @returns {WordTimestamp[]}
+ */
+function extractWordsFromTokens(tokens) {
+  if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
+    return [];
+  }
+
+  const words = [];
+  let currentWord = null;
+
+  for (const token of tokens) {
+    // Skip special tokens (id >= 50257 in whisper) and empty text
+    if (!token.text || token.text === '' || (token.id && token.id >= 50257)) {
+      continue;
+    }
+
+    const hasLeadingSpace = token.text.startsWith(' ');
+    const tokenText = token.text.trimStart();
+
+    if (tokenText.length === 0) continue;
+
+    const tokenStart = token.offsets ? token.offsets.from / 1000 : null;
+    const tokenEnd = token.offsets ? token.offsets.to / 1000 : null;
+
+    if (hasLeadingSpace || currentWord === null) {
+      // Start a new word
+      if (currentWord && currentWord.text.trim()) {
+        words.push(currentWord);
+      }
+      currentWord = {
+        text: tokenText,
+        start: tokenStart,
+        end: tokenEnd,
+      };
+    } else {
+      // Subword continuation - append to current word
+      if (currentWord) {
+        currentWord.text += tokenText;
+        if (tokenEnd !== null) {
+          currentWord.end = tokenEnd;
+        }
+      }
+    }
+  }
+
+  // Push the last word
+  if (currentWord && currentWord.text.trim()) {
+    words.push(currentWord);
+  }
+
+  return words;
+}
+
+/**
  * Parse whisper.cpp JSON output to extract segments.
+ * Supports both standard (-oj) and full (-ojf) JSON formats.
+ * When full JSON is provided, word-level timestamps are extracted from tokens.
  * @param {Object} whisperJson - Whisper JSON output
  * @returns {WhisperSegment[]}
  */
@@ -390,15 +522,20 @@ function parseWhisperJson(whisperJson) {
     return [];
   }
 
-  return whisperJson.transcription.map((item) => ({
-    start: item.timestamps.from.replace(',', '.'),
-    end: item.timestamps.to.replace(',', '.'),
-    text: item.text.trim(),
-  })).map((seg) => ({
-    start: parseTimestamp(seg.start),
-    end: parseTimestamp(seg.end),
-    text: seg.text,
-  }));
+  return whisperJson.transcription.map((item) => {
+    const start = parseTimestamp(item.timestamps.from.replace(',', '.'));
+    const end = parseTimestamp(item.timestamps.to.replace(',', '.'));
+    const text = item.text.trim();
+
+    // Extract word-level timestamps from full JSON tokens (if available)
+    const words = extractWordsFromTokens(item.tokens);
+
+    const segment = { start, end, text };
+    if (words.length > 0) {
+      segment.words = words;
+    }
+    return segment;
+  });
 }
 
 /**

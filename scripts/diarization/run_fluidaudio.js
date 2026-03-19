@@ -52,7 +52,13 @@ async function runFluidAudio(audioPath, options = {}) {
       `fluidaudio-${Date.now()}.json`
     );
 
-    const args = ['process', audioPath, '--mode', 'offline', '--output', tempOutput];
+    // Export embeddings for speaker profile matching
+    const tempEmbeddings = path.join(
+      os.tmpdir(),
+      `fluidaudio-embeddings-${Date.now()}.json`
+    );
+
+    const args = ['process', audioPath, '--mode', 'offline', '--output', tempOutput, '--export-embeddings', tempEmbeddings];
 
     if (options.onProgress) {
       options.onProgress('Starting FluidAudio diarization...');
@@ -94,9 +100,24 @@ async function runFluidAudio(audioPath, options = {}) {
           // Convert FluidAudio format to pyannote-compatible format
           const result = convertFluidAudioOutput(fluidResult, audioPath);
 
-          // Clean up temp file
+          // Read embeddings if available
+          try {
+            if (fs.existsSync(tempEmbeddings)) {
+              const embeddingsContent = fs.readFileSync(tempEmbeddings, 'utf-8');
+              result.embeddings = JSON.parse(embeddingsContent);
+            }
+          } catch (e) {
+            console.warn('[FluidAudio] Could not read embeddings:', e.message);
+          }
+
+          // Clean up temp files
           try {
             fs.unlinkSync(tempOutput);
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          try {
+            fs.unlinkSync(tempEmbeddings);
           } catch (e) {
             // Ignore cleanup errors
           }

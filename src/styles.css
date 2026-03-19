@@ -2519,6 +2519,342 @@ body {
     background: #EFF6FF;
 }
 
+/* Speaker Match Panel */
+.speaker-match-panel {
+    background: #F0F9FF;
+    border: 1px solid #BAE6FD;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 8px;
+}
+
+.speaker-match-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.speaker-match-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #0369A1;
+}
+
+.speaker-match-title i {
+    margin-right: 6px;
+}
+
+.speaker-match-close {
+    background: none;
+    border: none;
+    color: #7DD3FC;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.speaker-match-close:hover {
+    color: #0369A1;
+    background: #E0F2FE;
+}
+
+.speaker-match-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.speaker-match-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.speaker-match-id {
+    font-size: 0.8rem;
+    color: #374151;
+    min-width: 90px;
+    font-family: monospace;
+}
+
+.speaker-match-suggestion {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.speaker-match-arrow {
+    color: #9CA3AF;
+    font-size: 0.7rem;
+}
+
+.speaker-match-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #0369A1;
+}
+
+.speaker-match-confidence {
+    font-size: 0.75rem;
+    color: #6B7280;
+    background: #E5E7EB;
+    padding: 1px 6px;
+    border-radius: 10px;
+}
+
+.speaker-match-accept {
+    background: #10B981;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.speaker-match-accept:hover {
+    background: #059669;
+}
+
+.speaker-match-reject {
+    background: none;
+    color: #9CA3AF;
+    border: 1px solid #D1D5DB;
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.speaker-match-reject:hover {
+    color: #EF4444;
+    border-color: #EF4444;
+}
+
+.speaker-match-new {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+}
+
+.speaker-match-new-input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid #D1D5DB;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: #374151;
+    background: white;
+    outline: none;
+}
+
+.speaker-match-new-input:focus {
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.speaker-match-create {
+    background: #3B82F6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.speaker-match-create:hover {
+    background: #2563EB;
+}
+
+.speaker-match-create:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.speaker-match-skip {
+    background: none;
+    color: #9CA3AF;
+    border: 1px solid #D1D5DB;
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.speaker-match-skip:hover {
+    color: #6B7280;
+    background: #F3F4F6;
+}
+
+.speaker-name-input-group {
+    flex: 1;
+    display: flex;
+}
+
+/* Speaker Profile Manager Modal */
+.speaker-profile-manager-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.speaker-profile-manager {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    width: 560px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.speaker-profile-manager-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.speaker-profile-manager-header h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+.speaker-profile-manager-header h3 i {
+    margin-right: 8px;
+    color: #3B82F6;
+}
+
+.speaker-profile-manager-close {
+    background: none;
+    border: none;
+    color: #9CA3AF;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.speaker-profile-manager-close:hover {
+    color: #6B7280;
+    background: #F3F4F6;
+}
+
+.speaker-profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.speaker-profile-empty {
+    text-align: center;
+    color: #9CA3AF;
+    padding: 24px;
+    font-size: 0.9rem;
+}
+
+.speaker-profile-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+}
+
+.speaker-profile-info {
+    flex: 1;
+}
+
+.speaker-profile-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #111827;
+}
+
+.speaker-profile-meta {
+    font-size: 0.75rem;
+    color: #6B7280;
+    margin-top: 2px;
+}
+
+.speaker-profile-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.speaker-profile-action-btn {
+    background: none;
+    border: 1px solid #D1D5DB;
+    color: #6B7280;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.speaker-profile-action-btn:hover {
+    color: #374151;
+    background: #F3F4F6;
+}
+
+.speaker-profile-action-btn.danger:hover {
+    color: #EF4444;
+    border-color: #EF4444;
+    background: #FEF2F2;
+}
+
+.speaker-profile-settings {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #E5E7EB;
+}
+
+.speaker-profile-settings h4 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0 0 10px 0;
+}
+
+.speaker-profile-threshold {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.speaker-profile-threshold label {
+    font-size: 0.8rem;
+    color: #6B7280;
+    min-width: 120px;
+}
+
+.speaker-profile-threshold input[type="range"] {
+    flex: 1;
+}
+
+.speaker-profile-threshold .threshold-value {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #374151;
+    min-width: 40px;
+    text-align: right;
+}
+
 /* Speaker label click-to-cycle */
 .srt-speaker-label-clickable {
     cursor: pointer;

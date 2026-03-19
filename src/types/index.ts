@@ -106,6 +106,45 @@ export interface SRTEntryWithSpeaker extends SRTEntry {
   speakerConfidence?: number;
 }
 
+// Speaker profile types (cross-session identification)
+export interface SpeakerProfile {
+  id: string;
+  displayName: string;
+  centroid: number[];
+  sampleCount: number;
+  appearances: SpeakerAppearance[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SpeakerAppearance {
+  transcriptionFolder: string;
+  speakerId: string;
+  matchConfidence: number;
+  confirmedByUser: boolean;
+}
+
+export interface SpeakerMatchSuggestion {
+  transcriptionSpeakerId: string;
+  profileId: string;
+  profileName: string;
+  similarity: number;
+}
+
+export interface SpeakerProfilesConfig {
+  similarityThreshold: number;
+}
+
+export interface EmbeddingChunk {
+  chunkIndex: number;
+  speakerIndex: number;
+  startTime: number;
+  endTime: number;
+  embedding256: number[];
+  rho128: number[];
+  cluster: number;
+}
+
 // Audio Player types
 export interface AudioPlayerState {
   isPlaying: boolean;
@@ -247,6 +286,37 @@ export interface ElectronAPI {
     success: boolean;
     message: string;
   }>;
+
+  // Speaker profile methods
+  getSpeakerProfiles: () => Promise<SpeakerProfile[]>;
+  createSpeakerProfile: (data: {
+    displayName: string;
+    embeddings: EmbeddingChunk[];
+    transcriptionFolder: string;
+    speakerId: string;
+  }) => Promise<SpeakerProfile>;
+  updateSpeakerProfile: (id: string, updates: { displayName?: string }) => Promise<{
+    success: boolean;
+    message: string;
+  }>;
+  deleteSpeakerProfile: (id: string) => Promise<{ success: boolean; message: string }>;
+  mergeSpeakerProfiles: (idA: string, idB: string) => Promise<{
+    success: boolean;
+    profile?: SpeakerProfile;
+    message?: string;
+  }>;
+  confirmSpeakerMatch: (
+    profileId: string,
+    transcriptionFolder: string,
+    speakerId: string,
+    embeddings: EmbeddingChunk[]
+  ) => Promise<{ success: boolean; message: string }>;
+  getSpeakerProfilesConfig: () => Promise<SpeakerProfilesConfig>;
+  updateSpeakerProfilesConfig: (config: Partial<SpeakerProfilesConfig>) => Promise<{
+    success: boolean;
+    message: string;
+  }>;
+  getTranscriptionEmbeddings: (folderName: string) => Promise<EmbeddingChunk[] | null>;
 
   // Diarization methods
   checkDiarizationEnvironment: (backend: string) => Promise<DiarizationEnvironmentCheck>;

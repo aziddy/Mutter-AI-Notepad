@@ -5,6 +5,7 @@ import { useTextSearch } from '../../hooks/useTextSearch';
 import AudioPlayer, { AudioPlayerRef } from '../Audio/AudioPlayer';
 import SRTViewer from './SRTViewer';
 import SpeakerRenamePanel from './SpeakerRenamePanel';
+import SpeakerMatchPanel from '../SpeakerProfiles/SpeakerMatchPanel';
 import LocalAISection from '../AI/LocalAISection';
 import APISection from '../AI/APISection';
 import AIResults from '../AI/AIResults';
@@ -676,6 +677,22 @@ const TranscriptionResults: React.FC<TranscriptionResultsProps> = ({ onSettingsC
               onClose={() => setShowSpeakerRename(false)}
             />
           )}
+          {state.speakerMatchSuggestions.length > 0 && state.currentJsonData.speakers && state.currentJsonData.speakers.length > 0 && (() => {
+            const folderPath = state.transcriptions.find(
+              t => t.fileName === state.currentTranscriptionId
+            )?.folderPath;
+            const folderName = folderPath?.split(/[\\/]/).pop();
+            if (!folderName) return null;
+            return (
+              <SpeakerMatchPanel
+                suggestions={state.speakerMatchSuggestions}
+                speakers={state.currentJsonData.speakers}
+                speakerNames={state.currentJsonData.speakerNames || {}}
+                folderName={folderName}
+                onDismiss={() => dispatch({ type: 'CLEAR_SPEAKER_MATCH_SUGGESTIONS' })}
+              />
+            );
+          })()}
         </div>
       )}
 

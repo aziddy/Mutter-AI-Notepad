@@ -271,7 +271,7 @@ class DiarizationService {
     console.log(`[Diarization] Pipeline complete in ${duration.toFixed(1)}s`);
 
     // Build final result
-    return {
+    const finalResult = {
       success: true,
       text: transcription.text,
       segments: alignedSegments,
@@ -287,6 +287,13 @@ class DiarizationService {
         ...(diarizationResult.metadata || {}),
       },
     };
+
+    // Include embeddings if available (FluidAudio only)
+    if (diarizationResult.embeddings) {
+      finalResult.embeddings = diarizationResult.embeddings;
+    }
+
+    return finalResult;
   }
 }
 

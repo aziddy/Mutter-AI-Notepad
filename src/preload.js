@@ -134,6 +134,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getUserPreferences: () => ipcRenderer.invoke('get-user-preferences'),
   updateUserPreferences: (preferences) => ipcRenderer.invoke('update-user-preferences', preferences),
 
+  // Speaker Profile APIs
+  getSpeakerProfiles: () => ipcRenderer.invoke('get-speaker-profiles'),
+  createSpeakerProfile: (data) => ipcRenderer.invoke('create-speaker-profile', data),
+  updateSpeakerProfile: (id, updates) => ipcRenderer.invoke('update-speaker-profile', id, updates),
+  deleteSpeakerProfile: (id) => ipcRenderer.invoke('delete-speaker-profile', id),
+  mergeSpeakerProfiles: (idA, idB) => ipcRenderer.invoke('merge-speaker-profiles', idA, idB),
+  confirmSpeakerMatch: (profileId, transcriptionFolder, speakerId, embeddings) =>
+    ipcRenderer.invoke('confirm-speaker-match', profileId, transcriptionFolder, speakerId, embeddings),
+  getSpeakerProfilesConfig: () => ipcRenderer.invoke('get-speaker-profiles-config'),
+  updateSpeakerProfilesConfig: (config) => ipcRenderer.invoke('update-speaker-profiles-config', config),
+  getTranscriptionEmbeddings: (folderName) => ipcRenderer.invoke('get-transcription-embeddings', folderName),
+
   // Diarization APIs
   checkDiarizationEnvironment: (backend) => ipcRenderer.invoke('check-diarization-environment', backend),
   getDiarizationConfig: () => ipcRenderer.invoke('get-diarization-config'),

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { useElectron } from '../../hooks/useElectron';
 import { LLMConfig, AIModel, DiarizationConfig, DiarizationEnvironmentCheck } from '../../types';
+import SpeakerProfileManager from '../SpeakerProfiles/SpeakerProfileManager';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onConfig
   const [diarizationConfig, setDiarizationConfig] = useState<DiarizationConfig | null>(null);
   const [diarizationEnvCheck, setDiarizationEnvCheck] = useState<DiarizationEnvironmentCheck | null>(null);
   const [isCheckingDiarizationEnv, setIsCheckingDiarizationEnv] = useState(false);
+  const [showProfileManager, setShowProfileManager] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -599,9 +601,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onConfig
                   )}
                 </div>
               )}
+              <div className="config-field" style={{ marginTop: '12px' }}>
+                <button
+                  className="btn btn-outline"
+                  onClick={() => setShowProfileManager(true)}
+                  style={{ width: '100%' }}
+                >
+                  <i className="fas fa-users"></i>
+                  Manage Speaker Profiles
+                </button>
+                <span className="field-hint">View, rename, merge, or delete speaker voice profiles used for cross-session matching</span>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Speaker Profile Manager */}
+        <SpeakerProfileManager
+          isOpen={showProfileManager}
+          onClose={() => setShowProfileManager(false)}
+        />
 
         {/* Footer */}
         <div className="settings-footer">

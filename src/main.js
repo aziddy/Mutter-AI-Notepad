@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const { transcribeAudio } = require('./transcription');
 const { DiarizationConfigService } = require('./diarization-config');
+const { SpeakerProfileService } = require('./speaker-profiles');
 const { DiarizationService } = require('../scripts/diarization/diarization-service');
 const {
   generateSummary,
@@ -602,6 +603,9 @@ ipcMain.handle('export-transcription', async (event, content, defaultFileName) =
 // Diarization Configuration Service
 const diarizationConfigService = new DiarizationConfigService();
 
+// Speaker Profile Service
+const speakerProfileService = new SpeakerProfileService();
+
 // Diarization IPC Handlers
 ipcMain.handle('check-diarization-environment', async (event, backend = 'fluidaudio') => {
   try {
@@ -628,6 +632,59 @@ ipcMain.handle('get-diarization-config', async () => {
 
 ipcMain.handle('update-diarization-config', async (event, config) => {
   return diarizationConfigService.updateConfig(config);
+});
+
+// Speaker Profile IPC Handlers
+ipcMain.handle('get-speaker-profiles', async () => {
+  return speakerProfileService.getProfiles();
+});
+
+ipcMain.handle('create-speaker-profile', async (event, data) => {
+  return speakerProfileService.createProfile(
+    data.displayName,
+    data.embeddings,
+    data.transcriptionFolder,
+    data.speakerId
+  );
+});
+
+ipcMain.handle('update-speaker-profile', async (event, id, updates) => {
+  return speakerProfileService.updateProfile(id, updates);
+});
+
+ipcMain.handle('delete-speaker-profile', async (event, id) => {
+  return speakerProfileService.deleteProfile(id);
+});
+
+ipcMain.handle('merge-speaker-profiles', async (event, idA, idB) => {
+  return speakerProfileService.mergeProfiles(idA, idB);
+});
+
+ipcMain.handle('confirm-speaker-match', async (event, profileId, transcriptionFolder, speakerId, embeddings) => {
+  return speakerProfileService.confirmMatch(profileId, transcriptionFolder, speakerId, embeddings);
+});
+
+ipcMain.handle('get-speaker-profiles-config', async () => {
+  return speakerProfileService.getConfig();
+});
+
+ipcMain.handle('update-speaker-profiles-config', async (event, config) => {
+  return speakerProfileService.updateConfig(config);
+});
+
+ipcMain.handle('get-transcription-embeddings', async (event, folderName) => {
+  try {
+    const transcriptionsDir = path.join(process.cwd(), 'transcriptions');
+    const folderPath = path.join(transcriptionsDir, folderName);
+    const files = await fs.readdir(folderPath);
+    const embeddingsFile = files.find(f => f.endsWith('-embeddings.json'));
+    if (!embeddingsFile) return null;
+    const content = await fs.readFile(path.join(folderPath, embeddingsFile), 'utf-8');
+    return JSON.parse(content);
+  } catch (error) {
+    console.error('Error reading embeddings:', error);
+    return null;
+  }
 });
 
 ipcMain.handle('transcribe-file-with-diarization', async (event, filePath, customName, streamId, speakerHints) => {
@@ -767,6 +824,27 @@ ipcMain.handle('transcribe-file-with-diarization', async (event, filePath, custo
     const jsonPath = path.join(transcriptionFolder, jsonFileName);
     await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2));
 
+    // Save embeddings and run speaker profile matching (FluidAudio only)
+    let matchSuggestions = [];
+    if (result.embeddings && result.embeddings.length > 0) {
+      sendProgress('Saving speaker embeddings...');
+      const embeddingsFileName = `${baseFileName}-embeddings.json`;
+      const embeddingsPath = path.join(transcriptionFolder, embeddingsFileName);
+      await fs.writeFile(embeddingsPath, JSON.stringify(result.embeddings, null, 2));
+
+      // Run matching against stored profiles
+      sendProgress('Matching speakers against known profiles...');
+      try {
+        const clusterEmbeddings = speakerProfileService.groupEmbeddingsByCluster(
+          result.embeddings,
+          result.speakers
+        );
+        matchSuggestions = speakerProfileService.matchSpeakers(clusterEmbeddings);
+      } catch (matchError) {
+        console.warn('Speaker profile matching failed:', matchError);
+      }
+    }
+
     sendProgress('Diarization complete!');
 
     // Send completion
@@ -780,7 +858,8 @@ ipcMain.handle('transcribe-file-with-diarization', async (event, filePath, custo
       fileName: textFileName,
       jsonFileName: jsonFileName,
       srtFileName: srtFileName,
-      folderPath: transcriptionFolder
+      folderPath: transcriptionFolder,
+      matchSuggestions: matchSuggestions
     };
 
     event.sender.send(`diarization-complete-${streamId}`, finalResult);

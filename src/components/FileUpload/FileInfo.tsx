@@ -51,7 +51,7 @@ const FileInfo: React.FC = () => {
           (message) => {
             dispatch({ type: 'SHOW_PROGRESS', payload: message });
           },
-          async (result) => {
+          async (result: any) => {
 
             dispatch({
               type: 'SET_CURRENT_TRANSCRIPTION',
@@ -65,6 +65,11 @@ const FileInfo: React.FC = () => {
 
             if (result.jsonData?.metadata?.audioSourceFile) {
               dispatch({ type: 'SET_AUDIO_FILE', payload: result.jsonData.metadata.audioSourceFile });
+            }
+
+            // Set speaker match suggestions if available
+            if (result.matchSuggestions && result.matchSuggestions.length > 0) {
+              dispatch({ type: 'SET_SPEAKER_MATCH_SUGGESTIONS', payload: result.matchSuggestions });
             }
 
             dispatch({ type: 'HIDE_PROGRESS' });

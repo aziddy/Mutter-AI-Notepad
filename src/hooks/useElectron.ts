@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { TranscriptionData, LLMStatus, LLMConfig, AIModel, UserPreferences, DiarizationConfig, DiarizationEnvironmentCheck, TranscriptionJsonData } from '../types';
+import { TranscriptionData, LLMStatus, LLMConfig, AIModel, UserPreferences, DiarizationConfig, DiarizationEnvironmentCheck, TranscriptionJsonData, SpeakerProfile, SpeakerProfilesConfig, EmbeddingChunk } from '../types';
 
 export const useElectron = () => {
   // File operations
@@ -164,6 +164,62 @@ export const useElectron = () => {
     return await window.electronAPI.updateUserPreferences(preferences);
   }, []);
 
+  // Speaker profile operations
+  const getSpeakerProfiles = useCallback(async (): Promise<SpeakerProfile[]> => {
+    if (!window.electronAPI) throw new Error('Electron API not available');
+    return await window.electronAPI.getSpeakerProfiles();
+  }, []);
+
+  const createSpeakerProfile = useCallback(async (data: {
+    displayName: string;
+    embeddings: EmbeddingChunk[];
+    transcriptionFolder: string;
+    speakerId: string;
+  }): Promise<SpeakerProfile> => {
+    if (!window.electronAPI) throw new Error('Electron API not available');
+    return await window.electronAPI.createSpeakerProfile(data);
+  }, []);
+
+  const updateSpeakerProfile = useCallback(async (id: string, updates: { displayName?: string }) => {
+    if (!window.electronAPI) throw new Error('Electron API not available');
+    return await window.electronAPI.updateSpeakerProfile(id, updates);
+  }, []);
+
+  const deleteSpeakerProfile = useCallback(async (id: string) => {
+    if (!window.electronAPI) throw new Error('Electron API not available');
+    return await window.electronAPI.deleteSpeakerProfile(id);
+  }, []);
+
+  const mergeSpeakerProfiles = useCallback(async (idA: string, idB: string) => {
+    if (!window.electronAPI) throw new Error('Electron API not available');
+    return await window.electronAPI.mergeSpeakerProfiles(idA, idB);
+  }, []);
+
+  const confirmSpeakerMatch = useCallback(async (
+    profileId: string,
+    transcriptionFolder: string,
+    speakerId: string,
+    embeddings: EmbeddingChunk[]
+  ) => {
+    if (!window.electronAPI) throw new Error('Electron API not available');
+    return await window.electronAPI.confirmSpeakerMatch(profileId, transcriptionFolder, speakerId, embeddings);
+  }, []);
+
+  const getSpeakerProfilesConfig = useCallback(async (): Promise<SpeakerProfilesConfig> => {
+    if (!window.electronAPI) throw new Error('Electron API not available');
+    return await window.electronAPI.getSpeakerProfilesConfig();
+  }, []);
+
+  const updateSpeakerProfilesConfig = useCallback(async (config: Partial<SpeakerProfilesConfig>) => {
+    if (!window.electronAPI) throw new Error('Electron API not available');
+    return await window.electronAPI.updateSpeakerProfilesConfig(config);
+  }, []);
+
+  const getTranscriptionEmbeddings = useCallback(async (folderName: string): Promise<EmbeddingChunk[] | null> => {
+    if (!window.electronAPI) throw new Error('Electron API not available');
+    return await window.electronAPI.getTranscriptionEmbeddings(folderName);
+  }, []);
+
   // Diarization operations
   const checkDiarizationEnvironment = useCallback(async (backend: string): Promise<DiarizationEnvironmentCheck> => {
     if (!window.electronAPI) {
@@ -243,6 +299,17 @@ export const useElectron = () => {
     // User preferences
     getUserPreferences,
     updateUserPreferences,
+
+    // Speaker profile operations
+    getSpeakerProfiles,
+    createSpeakerProfile,
+    updateSpeakerProfile,
+    deleteSpeakerProfile,
+    mergeSpeakerProfiles,
+    confirmSpeakerMatch,
+    getSpeakerProfilesConfig,
+    updateSpeakerProfilesConfig,
+    getTranscriptionEmbeddings,
 
     // Diarization operations
     checkDiarizationEnvironment,

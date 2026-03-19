@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { TranscriptionData, LLMStatus, TabType, ToastMessage, SRTEntry, TranscriptionAIState, SpeakerSegment } from '../types';
+import { TranscriptionData, LLMStatus, TabType, ToastMessage, SRTEntry, TranscriptionAIState, SpeakerSegment, SpeakerMatchSuggestion } from '../types';
 
 // State interface
 interface AppState {
@@ -25,6 +25,9 @@ interface AppState {
   // LLM State
   llmStatus: LLMStatus | null;
   // aiResults moved to per-transcription state
+
+  // Speaker match suggestions (from post-diarization matching)
+  speakerMatchSuggestions: SpeakerMatchSuggestion[];
 
   // Toast messages
   toastMessages: ToastMessage[];
@@ -54,6 +57,8 @@ type AppAction =
   | { type: 'HIDE_TRANSCRIPTION_AI_RESULTS'; payload: { transcriptionId: string } }
   | { type: 'SET_SPEAKER_NAMES'; payload: Record<string, string> }
   | { type: 'UPDATE_SPEAKER_SEGMENTS'; payload: SpeakerSegment[] }
+  | { type: 'SET_SPEAKER_MATCH_SUGGESTIONS'; payload: SpeakerMatchSuggestion[] }
+  | { type: 'CLEAR_SPEAKER_MATCH_SUGGESTIONS' }
   | { type: 'ADD_TOAST'; payload: ToastMessage }
   | { type: 'REMOVE_TOAST'; payload: string };
 
@@ -77,6 +82,8 @@ const initialState: AppState = {
   transcriptions: [],
 
   llmStatus: null,
+
+  speakerMatchSuggestions: [],
 
   toastMessages: [],
 };
@@ -286,6 +293,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
         currentJsonData: state.currentJsonData
           ? { ...state.currentJsonData, speakerSegments: action.payload }
           : state.currentJsonData,
+      };
+
+    case 'SET_SPEAKER_MATCH_SUGGESTIONS':
+      return {
+        ...state,
+        speakerMatchSuggestions: action.payload,
+      };
+
+    case 'CLEAR_SPEAKER_MATCH_SUGGESTIONS':
+      return {
+        ...state,
+        speakerMatchSuggestions: [],
       };
 
     case 'ADD_TOAST':
